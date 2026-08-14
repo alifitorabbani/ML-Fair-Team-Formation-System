@@ -2,7 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sess
 from app.config.settings import settings
 from app.models.models import Base
 import os
-from urllib.parse import urlparse, urlunparse, parse_qsl
+from urllib.parse import urlparse, urlunparse
 
 SQLALCHEMY_DATABASE_URL = settings.database_url
 
@@ -12,17 +12,11 @@ if SQLALCHEMY_DATABASE_URL.startswith("postgresql://"):
 elif SQLALCHEMY_DATABASE_URL.startswith("postgres://"):
     SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("postgres://", "postgresql+asyncpg://", 1)
 
-# asyncpg does not accept psycopg2-style connect params like sslmode; normalize query string
+# For PostgreSQL on Vercel, strip all query params to avoid asyncpg receiving unsupported kwargs
+# like sslmode/channel_binding from SQLAlchemy's URL translation.
 if "postgresql+asyncpg://" in SQLALCHEMY_DATABASE_URL:
     parsed = urlparse(SQLALCHEMY_DATABASE_URL)
-    query_items = parse_qsl(parsed.query, keep_blank_values=True)
-    filtered_items = [
-        (key, value)
-        for key, value in query_items
-        if key.lower() not in {"sslmode", "ssl"}
-    ]
-    new_query = "&".join(f"{key}={value}" if value else key for key, value in filtered_items)
-    SQLALCHEMY_DATABASE_URL = urlunparse(parsed._replace(query=new_query))
+    SQLALCHEMY_DATABASE_URL = urlunparse(parsed._replace(query=""))
 
 connect_args: dict = {}
 if SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
