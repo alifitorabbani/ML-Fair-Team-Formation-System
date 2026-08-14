@@ -42,6 +42,20 @@ class RankingService:
         self.team_service = team_service
 
     async def load_and_validate_participants(self) -> Dict[str, Any]:
+        existing_count = len(await self.participant_repo.get_all())
+        if existing_count > 0:
+            return {
+                "is_valid": True,
+                "total_rows": existing_count,
+                "valid_participants": existing_count,
+                "invalid_participants": 0,
+                "missing_fields": [],
+                "invalid_records": [],
+                "duplicate_records": [],
+                "participants": [],
+                "skipped": True,
+            }
+
         db_path = _get_master_csv_path()
         import pandas as pd
 
@@ -93,14 +107,7 @@ class RankingService:
                 "status": ParticipantStatus.registered.value,
             })
 
-        existing_ids = {p.id for p in await self.participant_repo.get_all()}
-        new_participants = [p for p in participant_dicts if p["id"] not in existing_ids]
-
-        if new_participants:
-            await self.participant_repo.upsert_many(participant_dicts)
-        else:
-            for p in participant_dicts:
-                await self.participant_repo.upsert_many([p])
+        await self.participant_repo.upsert_many(participant_dicts)
 
         return {
             "is_valid": True,
@@ -152,8 +159,10 @@ class RankingService:
                 "secondary_comfort": p.secondary_lane_comfort or 0,
                 "normalized_primary": ((p.primary_lane_comfort or 0) / 5.0) * 100,
             }
-            await self.participant_repo.update_status(p.player_id, p.status)
-            await self.participant_repo.update_rank(p.player_id, idx)
+
+        status_map = {p.player_id: p.status for p in ranked}
+        rank_map = {p.player_id: p.rank for p in ranked}
+        await self.participant_repo.bulk_update_status_and_rank(status_map, rank_map)
 
         active_ranking = await self.ranking_repo.get_active()
         if active_ranking:

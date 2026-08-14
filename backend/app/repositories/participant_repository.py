@@ -26,23 +26,31 @@ class ParticipantRepository:
         return result.scalar_one() or 0
 
     async def upsert_many(self, participants: List[dict]) -> int:
-        from sqlalchemy.dialects.sqlite import insert
-        from uuid import uuid4
+        existing = await self.get_all()
+        existing_map = {p.id: p for p in existing}
 
-        count = 0
+        new_participants = []
+        updated_count = 0
+
         for p in participants:
-            existing = await self.get_by_id(p["id"])
-            if existing:
+            participant_id = p.get("id")
+            if not participant_id:
+                continue
+
+            if participant_id in existing_map:
+                existing_p = existing_map[participant_id]
                 for key, value in p.items():
                     if key != "id":
-                        setattr(existing, key, value)
-                count += 1
+                        setattr(existing_p, key, value)
+                updated_count += 1
             else:
-                db_p = ParticipantDB(**p)
-                self.db.add(db_p)
-                count += 1
+                new_participants.append(ParticipantDB(**p))
+
+        if new_participants:
+            self.db.add_all(new_participants)
+
         await self.db.flush()
-        return count
+        return updated_count + len(new_participants)
 
     async def clear_all(self) -> None:
         result = await self.db.execute(select(ParticipantDB))
@@ -62,3 +70,12 @@ class ParticipantRepository:
         if participant:
             participant.rank = rank
             await self.db.flush()
+
+    async def bulk_update_status_and_rank(self, status_map: Dict[str, str], rank_map: Dict[str, int]) -> None:
+        participants = await self.get_all()
+        for p in participants:
+            if p.id in status_map:
+                p.status = status_map[p.id]
+            if p.id in rank_map:
+                p.rank = rank_map[p.id]
+        await self.db.flush()
