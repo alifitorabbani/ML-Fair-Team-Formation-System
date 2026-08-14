@@ -2,6 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sess
 from app.config.settings import settings
 from app.models.models import Base
 import os
+from urllib.parse import urlparse, urlunparse
 
 SQLALCHEMY_DATABASE_URL = settings.database_url
 
@@ -11,9 +12,27 @@ if SQLALCHEMY_DATABASE_URL.startswith("postgresql://"):
 elif SQLALCHEMY_DATABASE_URL.startswith("postgres://"):
     SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("postgres://", "postgresql+asyncpg://", 1)
 
-connect_args = {}
+# asyncpg does not accept psycopg2-style connect params like sslmode; strip them
+if "postgresql+asyncpg://" in SQLALCHEMY_DATABASE_URL:
+    parsed = urlparse(SQLALCHEMY_DATABASE_URL)
+    query = []
+    for key, value in parsed.query.split("&"):
+        if key.lower().startswith("sslmode") or key.lower().startswith("ssl"):
+            continue
+        if value:
+            query.append(f"{key}={value}")
+        else:
+            query.append(key)
+    new_query = "&".join(query)
+    SQLALCHEMY_DATABASE_URL = urlunparse(parsed._replace(query=new_query))
+
+connect_args: dict = {}
 if SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
     connect_args = {"check_same_thread": False}
+
+# On Vercel, enable SSL for asyncpg explicitly if using PostgreSQL
+if os.getenv("VERCEL") == "1" and SQLALCHEMY_DATABASE_URL.startswith("postgresql+asyncpg://"):
+    connect_args["ssl"] = True
 
 engine = create_async_engine(
     SQLALCHEMY_DATABASE_URL,
