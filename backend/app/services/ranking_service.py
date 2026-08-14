@@ -42,20 +42,6 @@ class RankingService:
         self.team_service = team_service
 
     async def load_and_validate_participants(self) -> Dict[str, Any]:
-        existing_count = len(await self.participant_repo.get_all())
-        if existing_count > 0:
-            return {
-                "is_valid": True,
-                "total_rows": existing_count,
-                "valid_participants": existing_count,
-                "invalid_participants": 0,
-                "missing_fields": [],
-                "invalid_records": [],
-                "duplicate_records": [],
-                "participants": [],
-                "skipped": True,
-            }
-
         db_path = _get_master_csv_path()
         import pandas as pd
 
