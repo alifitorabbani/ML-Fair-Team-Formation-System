@@ -62,6 +62,17 @@ class Settings(BaseSettings):
     @property
     def admin_emails_list(self) -> List[str]:
         return [e.strip().lower() for e in self.admin_emails.split(",") if e.strip()]
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Vercel serverless functions have an ephemeral filesystem; use /tmp for writable paths
+        if os.getenv("VERCEL") == "1":
+            if not self.database_url or self.database_url.startswith("sqlite"):
+                # Normalize to absolute /tmp path if a relative sqlite path is configured
+                if "///./" in self.database_url or "//./" in self.database_url:
+                    self.database_url = "sqlite+aiosqlite:////tmp/ml_fair_teams.db"
+            if not self.upload_dir or self.upload_dir in ("./uploads", "uploads"):
+                self.upload_dir = "/tmp/uploads"
     
     class Config:
         env_file = ".env"
