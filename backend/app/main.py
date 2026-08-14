@@ -188,14 +188,15 @@ def _load_default_database():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    _load_default_database()
+    try:
+        _load_default_database()
+    except Exception as e:
+        print(f"Startup warning: default database load failed: {e}")
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        raise
+        print(f"Startup warning: database initialization failed: {e}")
     yield
 
 
