@@ -2,7 +2,7 @@
 
 ## Overview
 
-`data/Database-Fix-WMPL-S3.csv` is the **MASTER DATABASE** for the ML Fair Team Formation System.
+`backend/data/Database-Fix-WMPL-S3.csv` is the **MASTER DATABASE** for the ML Fair Team Formation System.
 
 This file is the authoritative source of participant data. It must never be deleted, overwritten, or modified without explicit authorization.
 
@@ -12,8 +12,9 @@ This file is the authoritative source of participant data. It must never be dele
 
 ```
 ml-fair-team-formation/
-└── data/
-    └── Database-Fix-WMPL-S3.csv   ← READ-ONLY MASTER DATA
+└── backend/
+    └── data/
+        └── Database-Fix-WMPL-S3.csv   ← READ-ONLY MASTER DATA
 ```
 
 ---
@@ -57,7 +58,7 @@ The CSV contains 16 columns:
 Before any migration or deployment:
 
 ```bash
-cp data/Database-Fix-WMPL-S3.csv data/Database-Fix-WMPL-S3.csv.backup
+cp backend/data/Database-Fix-WMPL-S3.csv backend/data/Database-Fix-WMPL-S3.csv.backup
 ```
 
 ---
@@ -65,10 +66,10 @@ cp data/Database-Fix-WMPL-S3.csv data/Database-Fix-WMPL-S3.csv.backup
 ## Checksum Verification
 
 ```bash
-md5sum data/Database-Fix-WMPL-S3.csv
+md5sum backend/data/Database-Fix-WMPL-S3.csv
 # Expected: 7d5c072ee0d2b6d8bbbb1233d9a17b52
 
-sha256sum data/Database-Fix-WMPL-S3.csv
+sha256sum backend/data/Database-Fix-WMPL-S3.csv
 # Expected: a175532ad8326b765ed2e4493278190ec0a1e4371a3bb13008086bf171352f60
 ```
 
@@ -104,7 +105,7 @@ Database-Fix-WMPL-S3.csv
 
 If the PostgreSQL database is lost:
 
-1. Ensure `data/Database-Fix-WMPL-S3.csv` is intact.
+1. Ensure `backend/data/Database-Fix-WMPL-S3.csv` is intact.
 2. Re-deploy or restart the application.
 3. Call `POST /api/admin/process-participants` to re-import all participants.
 4. Regenerate rankings and teams as needed.
@@ -113,9 +114,9 @@ If the PostgreSQL database is lost:
 
 ## Rules
 
-- **DO NOT** modify `Database-Fix-WMPL-S3.csv`.
-- **DO NOT** delete `Database-Fix-WMPL-S3.csv`.
-- **DO NOT** replace `Database-Fix-WMPL-S3.csv` with a generated file.
+- **DO NOT** modify `backend/data/Database-Fix-WMPL-S3.csv`.
+- **DO NOT** delete `backend/data/Database-Fix-WMPL-S3.csv`.
+- **DO NOT** replace `backend/data/Database-Fix-WMPL-S3.csv` with a generated file.
 - **DO** create backups before migrations.
 - **DO** verify checksums before and after deployment.
 
@@ -125,7 +126,7 @@ If the PostgreSQL database is lost:
 
 | Database | Purpose | Persistence |
 |---|---|---|
-| `Database-Fix-WMPL-S3.csv` | Master participant data | Git-tracked, permanent |
+| `backend/data/Database-Fix-WMPL-S3.csv` | Master participant data | Git-tracked, permanent |
 | `ml_fair_teams.db` | Local development SQLite | Ephemeral, ignored by git |
 | PostgreSQL | Production application data | Persistent, hosted on Neon |
 | Vercel Blob | Payment proof files | Persistent, hosted on Vercel |

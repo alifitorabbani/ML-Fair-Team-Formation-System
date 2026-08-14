@@ -6,9 +6,8 @@ build-backend = "setuptools.build_meta"
 name = "ml-fair-team-formation"
 version = "1.0.0"
 description = "ML Fair Team Formation System for Mobile Legends competitions"
-readme = "README.md"
 requires-python = ">=3.11"
-license = {text = "MIT"}
+license = "MIT"
 dependencies = [
     "fastapi==0.115.0",
     "uvicorn==0.30.6",
@@ -27,6 +26,11 @@ dependencies = [
     "openpyxl==3.1.5",
     "requests==2.32.3",
 ]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*", "app.*"]
+exclude = ["api*", "tests*", "frontend*", "venv*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -12,7 +12,7 @@
 ## Step 1: Prepare GitHub
 
 1. Push this repository to GitHub.
-2. Ensure `data/Database-Fix-WMPL-S3.csv` is committed (it is tracked by git).
+2. Ensure `backend/data/Database-Fix-WMPL-S3.csv` is committed (it is tracked by git).
 3. Ensure `.env` and `.env.local` are NOT committed (they are in `.gitignore`).
 
 ---
@@ -60,7 +60,7 @@
 | `PAYMENT_ACCOUNT_NUMBER` | `082141233543` | Your account number |
 | `PAYMENT_ACCOUNT_NAME` | `Muhammad Syofiudin` | Your account name |
 | `PAYMENT_AMOUNT` | `20000` | Payment amount |
-| `MASTER_CSV_PATH` | `data/Database-Fix-WMPL-S3.csv` | Relative to project root |
+| `MASTER_CSV_PATH` | `data/Database-Fix-WMPL-S3.csv` | Relative to backend root |
 | `DEBUG` | `false` | Disable debug in production |
 
 ### Admin Emails (Optional)
@@ -99,7 +99,7 @@ After the first deployment:
 
 1. Login as admin: `POST /api/login` with admin email.
 2. Process participants: `POST /api/admin/process-participants` with admin token.
-3. This reads `data/Database-Fix-WMPL-S3.csv` and upserts participants into PostgreSQL.
+3. This reads `backend/data/Database-Fix-WMPL-S3.csv` and upserts participants into PostgreSQL.
 
 ---
 
@@ -196,4 +196,4 @@ Local `.env` files:
 
 ### Master CSV Not Found
 - Verify `MASTER_CSV_PATH` points to the correct relative path.
-- Ensure `data/Database-Fix-WMPL-S3.csv` is committed to git.
+- Ensure `backend/data/Database-Fix-WMPL-S3.csv` is committed to git.

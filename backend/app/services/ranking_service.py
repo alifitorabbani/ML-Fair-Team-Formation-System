@@ -21,7 +21,7 @@ def _get_master_csv_path() -> str:
     path = settings.master_csv_path
     if os.path.isabs(path):
         return path
-    return os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), path)
+    return os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), path)
 
 
 class RankingService:

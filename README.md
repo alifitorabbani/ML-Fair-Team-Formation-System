@@ -59,7 +59,7 @@ Vercel (Single Project)
 ### Data Flow
 
 ```
-data/Database-Fix-WMPL-S3.csv   (MASTER DATA — READ-ONLY)
+backend/data/Database-Fix-WMPL-S3.csv   (MASTER DATA — READ-ONLY)
          │
          ▼ READ / VALIDATE / UPSERT
 PostgreSQL                      (APPLICATION DATABASE)
@@ -309,7 +309,7 @@ Weights and settings are configurable via environment variables:
 | `PAYMENT_ACCOUNT_NUMBER` | `082141233543` | Payment account number |
 | `PAYMENT_ACCOUNT_NAME` | `Muhammad Syofiudin` | Payment account name |
 | `PAYMENT_AMOUNT` | `20000` | Required payment amount |
-| `MASTER_CSV_PATH` | `data/Database-Fix-WMPL-S3.csv` | Path to master CSV |
+| `MASTER_CSV_PATH` | `data/Database-Fix-WMPL-S3.csv` | Path to master CSV (relative to backend root) |
 | `BLOB_READ_WRITE_TOKEN` | `` | Vercel Blob token for payment proofs |
 | `ADMIN_EMAILS` | `rebanialifito@gmail.com,rabbanialifito@gmail.com` | Comma-separated admin emails |
 
@@ -422,7 +422,7 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for step-by-step deployment instructions to V
 
 ## Master Data
 
-See [MASTER_DATA.md](MASTER_DATA.md) for documentation about `data/Database-Fix-WMPL-S3.csv`.
+See [MASTER_DATA.md](MASTER_DATA.md) for documentation about `backend/data/Database-Fix-WMPL-S3.csv`.
 
 ---
 
