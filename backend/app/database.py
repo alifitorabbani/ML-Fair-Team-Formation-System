@@ -2,7 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sess
 from app.config.settings import settings
 from app.models.models import Base
 import os
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import urlparse, urlunparse, parse_qsl
 
 SQLALCHEMY_DATABASE_URL = settings.database_url
 
@@ -12,18 +12,16 @@ if SQLALCHEMY_DATABASE_URL.startswith("postgresql://"):
 elif SQLALCHEMY_DATABASE_URL.startswith("postgres://"):
     SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("postgres://", "postgresql+asyncpg://", 1)
 
-# asyncpg does not accept psycopg2-style connect params like sslmode; strip them
+# asyncpg does not accept psycopg2-style connect params like sslmode; normalize query string
 if "postgresql+asyncpg://" in SQLALCHEMY_DATABASE_URL:
     parsed = urlparse(SQLALCHEMY_DATABASE_URL)
-    query = []
-    for key, value in parsed.query.split("&"):
-        if key.lower().startswith("sslmode") or key.lower().startswith("ssl"):
-            continue
-        if value:
-            query.append(f"{key}={value}")
-        else:
-            query.append(key)
-    new_query = "&".join(query)
+    query_items = parse_qsl(parsed.query, keep_blank_values=True)
+    filtered_items = [
+        (key, value)
+        for key, value in query_items
+        if key.lower() not in {"sslmode", "ssl"}
+    ]
+    new_query = "&".join(f"{key}={value}" if value else key for key, value in filtered_items)
     SQLALCHEMY_DATABASE_URL = urlunparse(parsed._replace(query=new_query))
 
 connect_args: dict = {}
