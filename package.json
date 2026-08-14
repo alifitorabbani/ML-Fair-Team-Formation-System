@@ -1,0 +1,12 @@
+{
+  "name": "ml-fair-team-formation",
+  "private": true,
+  "scripts": {
+    "build": "cd frontend && npm install && npm run build"
+  },
+  "dependencies": {
+    "next": "14.2.5",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  }
+}

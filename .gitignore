@@ -1,0 +1,59 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+env.bak/
+venv.bak/
+*.db
+*.sqlite
+*.sqlite3
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+build/
+dist/
+.npm
+.eslintcache
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Vercel
+.vercel/
+
+# Temporary uploads
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Secrets
+.env
+.env.*
+!.env.example
+.vercel
+.env*.local

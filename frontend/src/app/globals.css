@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-inter: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+html,
+body {
+  min-height: 100vh;
+  background-color: theme('colors.surface.950');
+  color: #e5e7eb;
+  font-family: var(--font-inter);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+@layer components {
+  .page-shell {
+    @apply min-h-screen bg-gradient-to-br from-surface-950 via-surface-900 to-surface-950;
+  }
+
+  .glass-panel {
+    @apply rounded-2xl border border-white/10 bg-surface-900/80 backdrop-blur-xl;
+  }
+
+  .brand-gradient {
+    @apply bg-gradient-to-r from-brand-600 to-brand-700;
+  }
+
+  .brand-gradient-text {
+    @apply bg-gradient-to-r from-brand-400 to-brand-500 bg-clip-text text-transparent;
+  }
+
+  .enterprise-btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold tracking-wide transition-all duration-200;
+  }
+}

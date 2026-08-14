@@ -1,0 +1,25 @@
+[project]
+name = "ml-fair-team-formation"
+version = "1.0.0"
+description = "ML Fair Team Formation System for Mobile Legends competitions"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+
+[tool.black]
+line-length = 88
+target-version = ["py311"]
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[tool.mypy]
+strict = true
+ignore_missing_imports = true
