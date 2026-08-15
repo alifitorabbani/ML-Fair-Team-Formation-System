@@ -31,7 +31,7 @@ class ParticipantRepository:
         offset = (page - 1) * page_size
         result = await self.db.execute(
             select(ParticipantDB)
-            .where(ParticipantDB.rank.is_not(None))
+            .where(ParticipantDB.status == "QUALIFIED", ParticipantDB.rank.is_not(None))
             .order_by(ParticipantDB.rank.asc())
             .limit(page_size)
             .offset(offset)
@@ -40,7 +40,7 @@ class ParticipantRepository:
 
     async def count_ranked(self) -> int:
         result = await self.db.execute(
-            select(func.count()).select_from(ParticipantDB).where(ParticipantDB.rank.is_not(None))
+            select(func.count()).select_from(ParticipantDB).where(ParticipantDB.status == "QUALIFIED", ParticipantDB.rank.is_not(None))
         )
         return result.scalar_one() or 0
 
