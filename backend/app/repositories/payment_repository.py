@@ -26,6 +26,14 @@ class PaymentRepository:
         result = await self.db.execute(select(Payment).order_by(desc(Payment.created_at)))
         return list(result.scalars().all())
 
+    async def get_by_player_ids(self, player_ids: List[str]) -> List[Payment]:
+        if not player_ids:
+            return []
+        result = await self.db.execute(
+            select(Payment).where(Payment.player_id.in_(player_ids))
+        )
+        return list(result.scalars().all())
+
     async def create_or_update(self, player_id: str, status: str = PaymentStatus.pending.value,
                                amount: Optional[float] = None, method: Optional[str] = None,
                                transaction_id: Optional[str] = None, notes: Optional[str] = None) -> Payment:

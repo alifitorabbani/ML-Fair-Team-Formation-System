@@ -13,6 +13,20 @@ class ParticipantRepository:
         result = await self.db.execute(select(ParticipantDB).order_by(ParticipantDB.id))
         return list(result.scalars().all())
 
+    async def get_by_ids(self, ids: List[str]) -> List[ParticipantDB]:
+        if not ids:
+            return []
+        result = await self.db.execute(
+            select(ParticipantDB).where(ParticipantDB.id.in_(ids)).order_by(ParticipantDB.id)
+        )
+        return list(result.scalars().all())
+
+    async def get_by_status(self, status: str) -> List[ParticipantDB]:
+        result = await self.db.execute(
+            select(ParticipantDB).where(ParticipantDB.status == status).order_by(ParticipantDB.id)
+        )
+        return list(result.scalars().all())
+
     async def get_ranked(self, page: int = 1, page_size: int = 20) -> List[ParticipantDB]:
         offset = (page - 1) * page_size
         result = await self.db.execute(

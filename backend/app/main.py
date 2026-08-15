@@ -457,12 +457,11 @@ async def get_my_team(x_user_token: Optional[str] = Header(None), db: AsyncSessi
         }
 
     participant_repo = ParticipantRepository(db)
-    qualified = [p for p in await participant_repo.get_all() if p.status == "QUALIFIED"]
-    unpaid = []
-    for p in qualified:
-        pay = await payment_repo.get_by_player_id(p.id)
-        if not pay or pay.status != "PAID":
-            unpaid.append(p.name or p.id)
+    qualified = await participant_repo.get_by_status("QUALIFIED")
+    qualified_ids = [p.id for p in qualified]
+    payments = await payment_repo.get_by_player_ids(qualified_ids)
+    paid_ids = {p.player_id for p in payments if p.status == "PAID"}
+    unpaid = [p.name or p.id for p in qualified if p.id not in paid_ids]
     if unpaid:
         return {
             "team_id": None,
@@ -1376,13 +1375,8 @@ async def get_my_payment_status(x_user_token: Optional[str] = Header(None), db: 
     participant_repo = ParticipantRepository(db)
     payment_repo = PaymentRepository(db)
 
-    qualified = [p for p in await participant_repo.get_all() if p.status == "QUALIFIED"]
-    total_qualified = len(qualified)
-    paid_count = 0
-    for p in qualified:
-        payment = await payment_repo.get_by_player_id(p.id)
-        if payment and payment.status == "PAID":
-            paid_count += 1
+    total_qualified = await participant_repo.count_by_status("QUALIFIED")
+    paid_count = await payment_repo.count_by_status("PAID")
 
     all_paid = total_qualified > 0 and paid_count == total_qualified
     return {
@@ -1455,7 +1449,9 @@ async def get_all_teams(x_user_token: Optional[str] = Header(None), db: AsyncSes
 
     latest = sorted(active, key=lambda v: v.generated_at, reverse=True)[0]
     members = await team_repo.get_members_by_version(latest.id)
-    participants_map = {p.id: p for p in await participant_repo.get_all()}
+    player_ids = [m.player_id for m in members if m.player_id]
+    participants = await participant_repo.get_by_ids(player_ids)
+    participants_map = {p.id: p for p in participants}
 
     teams_map: Dict[str, list] = {}
     for m in members:
@@ -1517,13 +1513,9 @@ async def get_all_teams(x_user_token: Optional[str] = Header(None), db: AsyncSes
 
     from app.repositories.payment_repository import PaymentRepository
     payment_repo = PaymentRepository(db)
-    qualified = [p for p in await participant_repo.get_all() if p.status == "QUALIFIED"]
-    paid_count = 0
-    for p in qualified:
-        payment = await payment_repo.get_by_player_id(p.id)
-        if payment and payment.status == "PAID":
-            paid_count += 1
-    all_paid = len(qualified) > 0 and paid_count == len(qualified)
+    total_qualified = await participant_repo.count_by_status("QUALIFIED")
+    paid_count = await payment_repo.count_by_status("PAID")
+    all_paid = total_qualified > 0 and paid_count == total_qualified
 
     return {
         "teams": teams_response,
@@ -1531,5 +1523,5 @@ async def get_all_teams(x_user_token: Optional[str] = Header(None), db: AsyncSes
         "current_role": current_role,
         "all_paid": all_paid,
         "paid_count": paid_count,
-        "total_qualified": len(qualified),
+        "total_qualified": total_qualified,
     }
