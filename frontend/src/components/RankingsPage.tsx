@@ -114,17 +114,39 @@ export default function RankingsPage() {
     )
   }
 
-  if (role === 'user' && myRanking && !searchQuery) {
-    return (
-      <div className="animate-fade-in space-y-4">
-        <UserRankingCard rank={myRanking.rank} total={myRanking.total} player={myRanking.player} />
+  const showUserCard = role === 'user' && myRanking && !searchQuery
 
-        <Card>
-          <div className="mb-4 flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-bold text-white">Perankingan Semua Pemain</h2>
+  if (loading) {
+    return (
+      <Card>
+        <LoadingSpinner text="Memuat perankingan..." />
+      </Card>
+    )
+  }
+
+  if (error) {
+    return (
+      <Card>
+        <ErrorMessage title="Error" message={error} />
+      </Card>
+    )
+  }
+
+  return (
+    <div className="animate-fade-in space-y-4">
+      {showUserCard && (
+        <UserRankingCard rank={myRanking.rank} total={myRanking.total} player={myRanking.player} />
+      )}
+
+      <Card>
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-bold text-white">
+              {showUserCard ? 'Perankingan Semua Pemain' : 'Perankingan'}
+            </h2>
+            {showUserCard && (
               <p className="text-xs text-gray-400">Ranking Anda ditandai</p>
-            </div>
+            )}
           </div>
           <div className="overflow-x-auto rounded-xl border border-white/5">
             <table className="w-full text-left text-sm">
