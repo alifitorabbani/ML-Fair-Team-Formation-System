@@ -338,6 +338,12 @@ async def admin_process_participants(x_user_token: Optional[str] = Header(None),
         await repo.upsert_many(participant_dicts)
         await db.commit()
         count = len(await repo.get_all())
+        cache.invalidate("admin_dashboard")
+        cache.invalidate("admin_rankings")
+        cache.invalidate("admin_ranking_versions")
+        cache.invalidate("admin_payments")
+        cache.invalidate("admin_audit_log")
+        cache.invalidate("admin_team_versions")
         return {
             "message": "Participants processed",
             "count": count,
@@ -652,6 +658,10 @@ async def admin_ranking_preview(x_user_token: Optional[str] = Header(None), db: 
             "details": result,
         })
 
+    cache.invalidate("admin_dashboard")
+    cache.invalidate("admin_rankings")
+    cache.invalidate("admin_ranking_versions")
+    cache.invalidate("system_state")
     return {
         "rankings": [r.dict() for r in result.get("rankings", [])],
         "total": result.get("total", 0),
@@ -690,6 +700,10 @@ async def admin_confirm_ranking(ranking_version_id: str = Query(...), x_user_tok
     if not result.get("success"):
         raise HTTPException(status_code=404, detail=result.get("message"))
 
+    cache.invalidate("admin_dashboard")
+    cache.invalidate("admin_rankings")
+    cache.invalidate("admin_ranking_versions")
+    cache.invalidate("system_state")
     return result
 
 
@@ -724,6 +738,10 @@ async def admin_get_rankings(x_user_token: Optional[str] = Header(None), db: Asy
 async def admin_get_ranking_versions(x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)):
     _require_admin(x_user_token)
 
+    cached = cache.get("admin_ranking_versions")
+    if cached is not None:
+        return JSONResponse(content=cached, headers={"Cache-Control": "public, max-age=30"})
+
     from app.repositories.participant_repository import ParticipantRepository
     from app.repositories.ranking_repository import RankingRepository
     from app.repositories.system_state_repository import SystemStateRepository
@@ -744,12 +762,18 @@ async def admin_get_ranking_versions(x_user_token: Optional[str] = Header(None),
     )
 
     versions = await ranking_service.get_ranking_versions()
-    return {"versions": versions}
+    result = {"versions": versions}
+    cache.set("admin_ranking_versions", result, ttl_seconds=30)
+    return JSONResponse(content=result, headers={"Cache-Control": "public, max-age=30"})
 
 
 @app.get("/api/admin/dashboard", response_model=AdminDashboardStats)
 async def admin_dashboard(x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)):
     _require_admin(x_user_token)
+
+    cached = cache.get("admin_dashboard")
+    if cached is not None:
+        return JSONResponse(content=cached, headers={"Cache-Control": "public, max-age=15"})
 
     from app.repositories.participant_repository import ParticipantRepository
     from app.repositories.ranking_repository import RankingRepository
@@ -777,14 +801,14 @@ async def admin_dashboard(x_user_token: Optional[str] = Header(None), db: AsyncS
     team_generated = active_team is not None
     total_teams = active_team.total_teams if active_team else 0
 
-    payment_stats = await PaymentRepository(db).get_all()
+    payment_stats = await payment_repo.get_all()
     payment_pending = sum(1 for p in payment_stats if p.status == "PENDING")
     payment_verified = sum(1 for p in payment_stats if p.status == "PAID")
     payment_failed = sum(1 for p in payment_stats if p.status == "FAILED")
 
     state = await system_state_repo.get_or_create()
 
-    return AdminDashboardStats(
+    result = AdminDashboardStats(
         total_participants=total_participants,
         processed_participants=processed_participants,
         qualified_count=qualified_count,
@@ -798,6 +822,8 @@ async def admin_dashboard(x_user_token: Optional[str] = Header(None), db: AsyncS
         ranking_generated=ranking_generated,
         team_generated=team_generated,
     )
+    cache.set("admin_dashboard", result.model_dump(), ttl_seconds=15)
+    return JSONResponse(content=result.model_dump(), headers={"Cache-Control": "public, max-age=15"})
 
 
 @app.post("/api/admin/generate-team")
@@ -962,6 +988,11 @@ async def admin_generate_team(request: AdminGenerateTeamRequest, x_user_token: O
             team_version_id=version_id,
         )
 
+        cache.invalidate("admin_dashboard")
+        cache.invalidate("admin_rankings")
+        cache.invalidate("admin_ranking_versions")
+        cache.invalidate("admin_team_versions")
+        cache.invalidate("system_state")
         return {
             "message": "Tim berhasil digenerate",
             "team_version_id": version_id,
@@ -982,9 +1013,13 @@ async def admin_generate_team(request: AdminGenerateTeamRequest, x_user_token: O
 async def admin_get_team_versions(x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)):
     _require_admin(x_user_token)
 
+    cached = cache.get("admin_team_versions")
+    if cached is not None:
+        return JSONResponse(content=cached, headers={"Cache-Control": "public, max-age=30"})
+
     team_repo = TeamRepository(db)
     versions = await team_repo.get_all()
-    return {
+    result = {
         "versions": [
             {
                 "id": v.id,
@@ -1004,6 +1039,8 @@ async def admin_get_team_versions(x_user_token: Optional[str] = Header(None), db
             for v in versions
         ]
     }
+    cache.set("admin_team_versions", result, ttl_seconds=30)
+    return JSONResponse(content=result, headers={"Cache-Control": "public, max-age=30"})
 
 
 @app.get("/api/admin/team-versions/{version_id}")
@@ -1121,6 +1158,10 @@ async def admin_verify_payment(request: PaymentVerificationRequest, x_user_token
     if not result:
         raise HTTPException(status_code=404, detail="Payment not found")
 
+    cache.invalidate("admin_dashboard")
+    cache.invalidate("admin_payments")
+    cache.invalidate("admin_team_versions")
+    cache.invalidate("system_state")
     return {
         "success": True,
         "id": result.id,
@@ -1138,6 +1179,10 @@ async def admin_verify_payment(request: PaymentVerificationRequest, x_user_token
 @app.get("/api/admin/payments")
 async def admin_get_payments(x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)):
     _require_admin(x_user_token)
+
+    cached = cache.get("admin_payments")
+    if cached is not None:
+        return JSONResponse(content=cached, headers={"Cache-Control": "public, max-age=15"})
 
     from app.repositories.payment_repository import PaymentRepository
     from app.repositories.participant_repository import ParticipantRepository
@@ -1169,9 +1214,9 @@ async def admin_get_payments(x_user_token: Optional[str] = Header(None), db: Asy
             "current_stars": participant.current_stars if participant else 0,
             "primary_lane": participant.primary_lane if participant else "",
         })
-    return {
-        "payments": result
-    }
+    response = {"payments": result}
+    cache.set("admin_payments", response, ttl_seconds=15)
+    return JSONResponse(content=response, headers={"Cache-Control": "public, max-age=15"})
 
 
 @app.delete("/api/admin/payments/{payment_id}")
@@ -1184,6 +1229,10 @@ async def admin_delete_payment(payment_id: str, x_user_token: Optional[str] = He
     if not success:
         raise HTTPException(status_code=404, detail="Payment not found")
 
+    cache.invalidate("admin_dashboard")
+    cache.invalidate("admin_payments")
+    cache.invalidate("admin_team_versions")
+    cache.invalidate("system_state")
     return {"success": True}
 
 
@@ -1191,10 +1240,14 @@ async def admin_delete_payment(payment_id: str, x_user_token: Optional[str] = He
 async def admin_get_audit_log(x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)):
     _require_admin(x_user_token)
 
+    cached = cache.get("admin_audit_log")
+    if cached is not None:
+        return JSONResponse(content=cached, headers={"Cache-Control": "public, max-age=30"})
+
     from app.repositories.audit_repository import AuditRepository
     audit_repo = AuditRepository(db)
     logs = await audit_repo.get_all(limit=200)
-    return {
+    result = {
         "logs": [
             {
                 "id": log.id,
@@ -1206,6 +1259,8 @@ async def admin_get_audit_log(x_user_token: Optional[str] = Header(None), db: As
             for log in logs
         ]
     }
+    cache.set("admin_audit_log", result, ttl_seconds=30)
+    return JSONResponse(content=result, headers={"Cache-Control": "public, max-age=30"})
 
 
 @app.get("/api/me/payment")
