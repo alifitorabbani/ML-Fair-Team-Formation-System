@@ -36,7 +36,9 @@ class PaymentRepository:
 
     async def create_or_update(self, player_id: str, status: str = PaymentStatus.pending.value,
                                amount: Optional[float] = None, method: Optional[str] = None,
-                               transaction_id: Optional[str] = None, notes: Optional[str] = None) -> Payment:
+                               transaction_id: Optional[str] = None, notes: Optional[str] = None,
+                               paid_at: Optional[datetime] = None, verified_by: Optional[str] = None,
+                               verified_at: Optional[datetime] = None) -> Payment:
         payment = await self.get_by_player_id(player_id)
         if payment:
             payment.status = status
@@ -48,7 +50,13 @@ class PaymentRepository:
                 payment.transaction_id = transaction_id
             if notes is not None:
                 payment.notes = notes
-            if status == PaymentStatus.paid.value:
+            if paid_at is not None:
+                payment.paid_at = paid_at
+            if verified_by is not None:
+                payment.verified_by = verified_by
+            if verified_at is not None:
+                payment.verified_at = verified_at
+            if status == PaymentStatus.paid.value and payment.paid_at is None:
                 payment.paid_at = datetime.utcnow()
         else:
             payment = Payment(
@@ -58,6 +66,9 @@ class PaymentRepository:
                 method=method,
                 transaction_id=transaction_id,
                 notes=notes,
+                paid_at=paid_at,
+                verified_by=verified_by,
+                verified_at=verified_at,
             )
             self.db.add(payment)
         await self.db.flush()

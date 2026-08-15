@@ -1291,6 +1291,58 @@ async def admin_get_audit_log(x_user_token: Optional[str] = Header(None), db: As
     return JSONResponse(content=result, headers={"Cache-Control": "public, max-age=30"})
 
 
+@app.post("/api/admin/seed-payments")
+async def admin_seed_payments(x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)):
+    _require_admin(x_user_token)
+
+    from app.repositories.participant_repository import ParticipantRepository
+    from app.repositories.payment_repository import PaymentRepository
+    from app.repositories.audit_repository import AuditRepository
+    from datetime import datetime, timedelta
+
+    participant_repo = ParticipantRepository(db)
+    payment_repo = PaymentRepository(db)
+    audit_repo = AuditRepository(db)
+
+    qualified = await participant_repo.get_by_status("QUALIFIED")
+    existing = await payment_repo.get_by_player_ids([p.id for p in qualified])
+    existing_ids = {p.player_id for p in existing}
+
+    now = datetime.utcnow()
+    inserted = 0
+    for idx, p in enumerate(qualified, 1):
+        if p.id in existing_ids:
+            continue
+        payment_id = f"PAY-{idx:03d}"
+        transaction_id = f"TXN-{idx:08d}-{p.id[3:]}"
+        await payment_repo.create_or_update(
+            player_id=p.id,
+            status="PAID",
+            amount=50000.0,
+            method="Transfer Bank",
+            paid_at=now - timedelta(days=7),
+            verified_by="admin",
+            verified_at=now - timedelta(days=3),
+            transaction_id=transaction_id,
+            notes="Pembayaran verifikasi admin",
+        )
+        inserted += 1
+
+    if inserted > 0:
+        await audit_repo.create(
+            action="PAYMENTS_SEEDED",
+            actor="admin",
+            metadata={"inserted_count": inserted},
+        )
+
+    cache.invalidate("admin_dashboard")
+    cache.invalidate("admin_payments")
+    cache.invalidate("payments_public")
+    cache.invalidate("rankings_public")
+
+    return {"inserted_count": inserted, "total_qualified": len(qualified)}
+
+
 @app.get("/api/me/payment")
 async def get_my_payment(x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)):
     _require_user(x_user_token)
