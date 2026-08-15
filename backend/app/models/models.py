@@ -38,8 +38,8 @@ class ParticipantDB(Base):
     gold_comfort = Column(Float, nullable=True)
     roam_comfort = Column(Float, nullable=True)
     lane_capabilities = Column(String, nullable=True)
-    status = Column(String, nullable=False, default="REGISTERED")
-    rank = Column(Integer, nullable=True)
+    status = Column(String, nullable=False, default="REGISTERED", index=True)
+    rank = Column(Integer, nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
@@ -72,7 +72,7 @@ class RankingVersion(Base):
     generated_by = Column(String, nullable=True)
     seed = Column(Integer, nullable=True)
     score_components = Column(String, nullable=True)
-    is_active = Column(Boolean, nullable=False, default=True)
+    is_active = Column(Boolean, nullable=False, default=True, index=True)
 
 
 class TeamVersion(Base):
@@ -92,7 +92,7 @@ class TeamVersion(Base):
     optimization_iterations = Column(Integer, nullable=True)
     processing_time_ms = Column(Float, nullable=True)
     generated_by = Column(String, nullable=True)
-    is_active = Column(Boolean, nullable=False, default=True)
+    is_active = Column(Boolean, nullable=False, default=True, index=True)
 
 
 class TeamMember(Base):
@@ -117,7 +117,7 @@ class Payment(Base):
 
     id = Column(String, primary_key=True, default=uuid_str, index=True)
     player_id = Column(String, nullable=False, index=True)
-    status = Column(String, nullable=False, default="PENDING")
+    status = Column(String, nullable=False, default="PENDING", index=True)
     amount = Column(Float, nullable=True)
     method = Column(String, nullable=True)
     paid_at = Column(DateTime, nullable=True)
