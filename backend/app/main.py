@@ -1310,7 +1310,11 @@ async def submit_payment(
 
     player_id = decode_token(x_user_token)["sub"]
     content = await proof.read()
-    storage_result = await storage_service.upload_payment_proof(player_id, proof.filename, content)
+    storage_result = {}
+    try:
+        storage_result = await storage_service.upload_payment_proof(player_id, proof.filename, content)
+    except Exception as e:
+        print(f"Payment proof upload failed: {e}")
 
     from app.repositories.payment_repository import PaymentRepository
     payment_repo = PaymentRepository(db)

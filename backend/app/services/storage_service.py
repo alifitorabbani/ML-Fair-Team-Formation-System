@@ -16,7 +16,11 @@ class StorageService:
 
     async def upload_payment_proof(self, player_id: str, filename: str, content: bytes) -> dict:
         if self._is_blob_configured():
-            return await self._upload_to_blob(player_id, filename, content)
+            try:
+                return await self._upload_to_blob(player_id, filename, content)
+            except Exception as e:
+                print(f"Blob upload failed, falling back to local storage: {e}")
+
         os.makedirs(self.local_dir, exist_ok=True)
         file_path = os.path.join(self.local_dir, f"{player_id}_{uuid.uuid4()}_{filename}")
         with open(file_path, "wb") as f:
