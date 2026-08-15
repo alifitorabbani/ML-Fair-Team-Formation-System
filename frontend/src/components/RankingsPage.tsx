@@ -262,22 +262,22 @@ export default function RankingsPage() {
                                 <div className="space-y-1">
                                   <div className="flex justify-between">
                                     <span className="text-gray-400">Kenyamanan Lane Utama</span>
-                                    <span className="text-white">{player.role_flexibility_breakdown?.primary_comfort || 0}/5 ({(player.role_flexibility_breakdown?.normalized_primary || 0).toFixed(1)}%)</span>
+                                    <span className="text-white">{player.role_flexibility_breakdown?.components?.primary?.comfort ?? player.role_flexibility_breakdown?.primary_comfort ?? 0}/5 ({player.role_flexibility_breakdown?.components?.primary?.normalized ?? player.role_flexibility_breakdown?.normalized_primary ?? 0}%)</span>
                                   </div>
-                                  {player.role_flexibility_breakdown?.secondary_comfort && (
+                                  {(player.role_flexibility_breakdown?.components?.secondary?.comfort ?? player.role_flexibility_breakdown?.secondary_comfort) && (
                                     <div className="flex justify-between">
                                       <span className="text-gray-400">Kenyamanan Lane 2</span>
-                                      <span className="text-white">{player.role_flexibility_breakdown.secondary_comfort}/5</span>
+                                      <span className="text-white">{player.role_flexibility_breakdown?.components?.secondary?.comfort ?? player.role_flexibility_breakdown?.secondary_comfort}/5</span>
                                     </div>
                                   )}
                                   <div className="flex justify-between border-t border-white/10 pt-1">
                                     <span className="text-brand-400">Kontribusi Lane Utama (70%)</span>
-                                    <span className="text-white">{((player.role_flexibility_breakdown?.normalized_primary || 0) * 0.7).toFixed(2)}</span>
+                                    <span className="text-white">{(player.role_flexibility_breakdown?.components?.primary?.contribution ?? ((player.role_flexibility_breakdown?.normalized_primary || 0) * 0.7)).toFixed(2)}</span>
                                   </div>
-                                  {player.role_flexibility_breakdown?.secondary_comfort && (
+                                  {(player.role_flexibility_breakdown?.components?.secondary?.comfort ?? player.role_flexibility_breakdown?.secondary_comfort) && (
                                     <div className="flex justify-between">
                                       <span className="text-brand-400">Kontribusi Lane 2 (30%)</span>
-                                      <span className="text-white">{((5.0 - (player.role_flexibility_breakdown?.secondary_comfort || 0)) / 5.0 * 0.3 * 100).toFixed(2)}</span>
+                                      <span className="text-white">{(player.role_flexibility_breakdown?.components?.secondary?.contribution ?? ((5.0 - (player.role_flexibility_breakdown?.secondary_comfort || 0)) / 5.0 * 0.3 * 100)).toFixed(2)}</span>
                                     </div>
                                   )}
                                   <div className="flex justify-between border-t border-white/10 pt-1">
@@ -534,22 +534,22 @@ export default function RankingsPage() {
                               <div className="space-y-1">
                                 <div className="flex justify-between">
                                   <span className="text-gray-400">Kenyamanan Lane Utama</span>
-                                  <span className="text-white">{player.role_flexibility_breakdown?.primary_comfort || 0}/5 ({(player.role_flexibility_breakdown?.normalized_primary || 0).toFixed(1)}%)</span>
+                                  <span className="text-white">{player.role_flexibility_breakdown?.components?.primary?.comfort ?? player.role_flexibility_breakdown?.primary_comfort ?? 0}/5 ({player.role_flexibility_breakdown?.components?.primary?.normalized ?? player.role_flexibility_breakdown?.normalized_primary ?? 0}%)</span>
                                 </div>
-                                {player.role_flexibility_breakdown?.secondary_comfort && (
+                                {(player.role_flexibility_breakdown?.components?.secondary?.comfort ?? player.role_flexibility_breakdown?.secondary_comfort) && (
                                   <div className="flex justify-between">
                                     <span className="text-gray-400">Kenyamanan Lane 2</span>
-                                    <span className="text-white">{player.role_flexibility_breakdown.secondary_comfort}/5</span>
+                                    <span className="text-white">{player.role_flexibility_breakdown?.components?.secondary?.comfort ?? player.role_flexibility_breakdown?.secondary_comfort}/5</span>
                                   </div>
                                 )}
                                 <div className="flex justify-between border-t border-white/10 pt-1">
                                   <span className="text-brand-400">Kontribusi Lane Utama (70%)</span>
-                                  <span className="text-white">{((player.role_flexibility_breakdown?.normalized_primary || 0) * 0.7).toFixed(2)}</span>
+                                  <span className="text-white">{(player.role_flexibility_breakdown?.components?.primary?.contribution ?? ((player.role_flexibility_breakdown?.normalized_primary || 0) * 0.7)).toFixed(2)}</span>
                                 </div>
-                                {player.role_flexibility_breakdown?.secondary_comfort && (
+                                {(player.role_flexibility_breakdown?.components?.secondary?.comfort ?? player.role_flexibility_breakdown?.secondary_comfort) && (
                                   <div className="flex justify-between">
                                     <span className="text-brand-400">Kontribusi Lane 2 (30%)</span>
-                                    <span className="text-white">{((5.0 - (player.role_flexibility_breakdown?.secondary_comfort || 0)) / 5.0 * 0.3 * 100).toFixed(2)}</span>
+                                    <span className="text-white">{(player.role_flexibility_breakdown?.components?.secondary?.contribution ?? ((5.0 - (player.role_flexibility_breakdown?.secondary_comfort || 0)) / 5.0 * 0.3 * 100)).toFixed(2)}</span>
                                   </div>
                                 )}
                                 <div className="flex justify-between border-t border-white/10 pt-1">

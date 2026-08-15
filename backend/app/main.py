@@ -14,6 +14,7 @@ import os
 from uuid import uuid4
 from typing import Optional, Dict, Any
 from pydantic import BaseModel
+from datetime import datetime, timedelta
 from app.config.settings import settings
 from app.schemas.schemas import (
     AdminGenerateRankingRequest,
@@ -197,6 +198,30 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+
+class SimpleCache:
+    def __init__(self):
+        self._store: Dict[str, Any] = {}
+        self._expiry: Dict[str, datetime] = {}
+
+    def get(self, key: str) -> Any:
+        if key in self._store:
+            if datetime.utcnow() < self._expiry.get(key, datetime.min):
+                return self._store[key]
+            self.invalidate(key)
+        return None
+
+    def set(self, key: str, value: Any, ttl_seconds: int = 60) -> None:
+        self._store[key] = value
+        self._expiry[key] = datetime.utcnow() + timedelta(seconds=ttl_seconds)
+
+    def invalidate(self, key: str) -> None:
+        self._store.pop(key, None)
+        self._expiry.pop(key, None)
+
+
+cache = SimpleCache()
 
 app.add_middleware(
     CORSMiddleware,
@@ -529,25 +554,31 @@ async def get_my_team(x_user_token: Optional[str] = Header(None), db: AsyncSessi
 
 @app.get("/api/config")
 async def get_config():
-    return {
+    return JSONResponse(content={
         "default_random_seed": settings.default_random_seed,
         "current_rank_weight": settings.current_rank_weight,
         "current_star_weight": settings.current_star_weight,
         "highest_rank_weight": settings.highest_rank_weight,
         "highest_star_weight": settings.highest_star_weight,
-    }
+    }, headers={"Cache-Control": "public, max-age=60"})
 
 
 @app.get("/api/system-state", response_model=SystemStateResponse)
 async def get_system_state(db: AsyncSession = Depends(get_db)):
+    cached = cache.get("system_state")
+    if cached is not None:
+        return JSONResponse(content=cached, headers={"Cache-Control": "public, max-age=10"})
+
     repo = SystemStateRepository(db)
     state = await repo.get_or_create()
-    return SystemStateResponse(
+    response = SystemStateResponse(
         state=state.state,
         current_ranking_version_id=state.current_ranking_version_id,
         current_team_version_id=state.current_team_version_id,
         updated_at=state.updated_at.isoformat() if state.updated_at else None,
     )
+    cache.set("system_state", response.model_dump(), ttl_seconds=10)
+    return JSONResponse(content=response.model_dump(), headers={"Cache-Control": "public, max-age=10"})
 
 
 @app.post("/api/admin/generate-ranking")

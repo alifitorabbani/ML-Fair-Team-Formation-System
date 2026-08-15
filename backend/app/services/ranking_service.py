@@ -134,16 +134,82 @@ class RankingService:
                 p.status = ParticipantStatus.qualified.value
             else:
                 p.status = ParticipantStatus.eliminated.value
+            cr = p.current_rank_score or 0.0
+            cs = p.current_star_score or 0.0
+            hr = p.highest_rank_score or 0.0
+            hs = p.highest_star_score or 0.0
             p.skill_score_breakdown = {
-                "current_rank_component": (p.current_rank_score or 0.0) * settings.current_rank_weight,
-                "current_star_component": (p.current_star_score or 0.0) * settings.current_star_weight,
-                "highest_rank_component": (p.highest_rank_score or 0.0) * settings.highest_rank_weight,
-                "highest_star_component": (p.highest_star_score or 0.0) * settings.highest_star_weight,
+                "total_skill_score": p.skill_score or 0.0,
+                "raw_total": cr + cs + hr + hs,
+                "final_score": cr + cs + hr + hs,
+                "components": {
+                    "current_rank": {
+                        "raw_score": round(cr, 4),
+                        "weight": settings.current_rank_weight,
+                        "weight_percent": round(settings.current_rank_weight * 100, 2),
+                        "contribution": round(cr * settings.current_rank_weight, 4),
+                        "formula": f"{cr:.4f} × {settings.current_rank_weight} = {round(cr * settings.current_rank_weight, 4)}",
+                    },
+                    "current_star": {
+                        "raw_score": round(cs, 4),
+                        "weight": settings.current_star_weight,
+                        "weight_percent": round(settings.current_star_weight * 100, 2),
+                        "contribution": round(cs * settings.current_star_weight, 4),
+                        "formula": f"{cs:.4f} × {settings.current_star_weight} = {round(cs * settings.current_star_weight, 4)}",
+                    },
+                    "highest_rank": {
+                        "raw_score": round(hr, 4),
+                        "weight": settings.highest_rank_weight,
+                        "weight_percent": round(settings.highest_rank_weight * 100, 2),
+                        "contribution": round(hr * settings.highest_rank_weight, 4),
+                        "formula": f"{hr:.4f} × {settings.highest_rank_weight} = {round(hr * settings.highest_rank_weight, 4)}",
+                    },
+                    "highest_star": {
+                        "raw_score": round(hs, 4),
+                        "weight": settings.highest_star_weight,
+                        "weight_percent": round(settings.highest_star_weight * 100, 2),
+                        "contribution": round(hs * settings.highest_star_weight, 4),
+                        "formula": f"{hs:.4f} × {settings.highest_star_weight} = {round(hs * settings.highest_star_weight, 4)}",
+                    },
+                },
+                "weights": {
+                    "current_rank": settings.current_rank_weight,
+                    "current_star": settings.current_star_weight,
+                    "highest_rank": settings.highest_rank_weight,
+                    "highest_star": settings.highest_star_weight,
+                },
+                "calculation": f"({cr:.4f} × {settings.current_rank_weight}) + ({cs:.4f} × {settings.current_star_weight}) + ({hr:.4f} × {settings.highest_rank_weight}) + ({hs:.4f} × {settings.highest_star_weight}) = {round(cr + cs + hr + hs, 4)}",
             }
             p.role_flexibility_breakdown = {
                 "primary_comfort": p.primary_lane_comfort or 0,
                 "secondary_comfort": p.secondary_lane_comfort or 0,
                 "normalized_primary": ((p.primary_lane_comfort or 0) / 5.0) * 100,
+                "normalized_secondary": ((p.secondary_lane_comfort or 0) / 5.0) * 100 if p.secondary_lane_comfort else 0.0,
+                "primary_weight": 0.70,
+                "secondary_weight": 0.30,
+                "primary_weight_percent": 70.0,
+                "secondary_weight_percent": 30.0,
+                "primary_contribution": round(((p.primary_lane_comfort or 0) / 5.0) * 100 * 0.70, 4),
+                "secondary_contribution": round(((p.secondary_lane_comfort or 0) / 5.0) * 100 * 0.30, 4) if p.secondary_lane_comfort else 0.0,
+                "flexibility_score": round((((p.primary_lane_comfort or 0) / 5.0) * 100 * 0.70) + (((p.secondary_lane_comfort or 0) / 5.0) * 100 * 0.30), 4) if p.secondary_lane_comfort else round(((p.primary_lane_comfort or 0) / 5.0) * 100 * 0.70, 4),
+                "components": {
+                    "primary": {
+                        "comfort": p.primary_lane_comfort or 0,
+                        "normalized": round(((p.primary_lane_comfort or 0) / 5.0) * 100, 2),
+                        "weight": 0.70,
+                        "weight_percent": 70.0,
+                        "contribution": round(((p.primary_lane_comfort or 0) / 5.0) * 100 * 0.70, 4),
+                        "formula": f"{((p.primary_lane_comfort or 0) / 5.0) * 100:.2f}% × 0.70 = {round(((p.primary_lane_comfort or 0) / 5.0) * 100 * 0.70, 4)}",
+                    },
+                    "secondary": {
+                        "comfort": p.secondary_lane_comfort or 0,
+                        "normalized": round(((p.secondary_lane_comfort or 0) / 5.0) * 100, 2) if p.secondary_lane_comfort else 0.0,
+                        "weight": 0.30,
+                        "weight_percent": 30.0,
+                        "contribution": round(((p.secondary_lane_comfort or 0) / 5.0) * 100 * 0.30, 4) if p.secondary_lane_comfort else 0.0,
+                        "formula": f"{((p.secondary_lane_comfort or 0) / 5.0) * 100:.2f}% × 0.30 = {round(((p.secondary_lane_comfort or 0) / 5.0) * 100 * 0.30, 4)}" if p.secondary_lane_comfort else "0.00% × 0.30 = 0.0000",
+                    },
+                },
             }
 
         status_map = {p.player_id: p.status for p in ranked}
@@ -268,10 +334,46 @@ class RankingService:
                 rank=p.rank,
                 status=p.status,
                 skill_score_breakdown={
-                    "current_rank_component": (p.current_rank_score or 0.0) * settings.current_rank_weight,
-                    "current_star_component": (p.current_star_score or 0.0) * settings.current_star_weight,
-                    "highest_rank_component": (p.highest_rank_score or 0.0) * settings.highest_rank_weight,
-                    "highest_star_component": (p.highest_star_score or 0.0) * settings.highest_star_weight,
+                    "total_skill_score": p.skill_score or 0.0,
+                    "raw_total": (p.current_rank_score or 0.0) + (p.current_star_score or 0.0) + (p.highest_rank_score or 0.0) + (p.highest_star_score or 0.0),
+                    "final_score": (p.current_rank_score or 0.0) + (p.current_star_score or 0.0) + (p.highest_rank_score or 0.0) + (p.highest_star_score or 0.0),
+                    "components": {
+                        "current_rank": {
+                            "raw_score": round(p.current_rank_score or 0.0, 4),
+                            "weight": settings.current_rank_weight,
+                            "weight_percent": round(settings.current_rank_weight * 100, 2),
+                            "contribution": round((p.current_rank_score or 0.0) * settings.current_rank_weight, 4),
+                            "formula": f"{(p.current_rank_score or 0.0):.4f} × {settings.current_rank_weight} = {round((p.current_rank_score or 0.0) * settings.current_rank_weight, 4)}",
+                        },
+                        "current_star": {
+                            "raw_score": round(p.current_star_score or 0.0, 4),
+                            "weight": settings.current_star_weight,
+                            "weight_percent": round(settings.current_star_weight * 100, 2),
+                            "contribution": round((p.current_star_score or 0.0) * settings.current_star_weight, 4),
+                            "formula": f"{(p.current_star_score or 0.0):.4f} × {settings.current_star_weight} = {round((p.current_star_score or 0.0) * settings.current_star_weight, 4)}",
+                        },
+                        "highest_rank": {
+                            "raw_score": round(p.highest_rank_score or 0.0, 4),
+                            "weight": settings.highest_rank_weight,
+                            "weight_percent": round(settings.highest_rank_weight * 100, 2),
+                            "contribution": round((p.highest_rank_score or 0.0) * settings.highest_rank_weight, 4),
+                            "formula": f"{(p.highest_rank_score or 0.0):.4f} × {settings.highest_rank_weight} = {round((p.highest_rank_score or 0.0) * settings.highest_rank_weight, 4)}",
+                        },
+                        "highest_star": {
+                            "raw_score": round(p.highest_star_score or 0.0, 4),
+                            "weight": settings.highest_star_weight,
+                            "weight_percent": round(settings.highest_star_weight * 100, 2),
+                            "contribution": round((p.highest_star_score or 0.0) * settings.highest_star_weight, 4),
+                            "formula": f"{(p.highest_star_score or 0.0):.4f} × {settings.highest_star_weight} = {round((p.highest_star_score or 0.0) * settings.highest_star_weight, 4)}",
+                        },
+                    },
+                    "weights": {
+                        "current_rank": settings.current_rank_weight,
+                        "current_star": settings.current_star_weight,
+                        "highest_rank": settings.highest_rank_weight,
+                        "highest_star": settings.highest_star_weight,
+                    },
+                    "calculation": f"({round(p.current_rank_score or 0.0, 4)} × {settings.current_rank_weight}) + ({round(p.current_star_score or 0.0, 4)} × {settings.current_star_weight}) + ({round(p.highest_rank_score or 0.0, 4)} × {settings.highest_rank_weight}) + ({round(p.highest_star_score or 0.0, 4)} × {settings.highest_star_weight}) = {round((p.current_rank_score or 0.0) + (p.current_star_score or 0.0) + (p.highest_rank_score or 0.0) + (p.highest_star_score or 0.0), 4)}",
                 },
                 role_flexibility_breakdown={
                     "primary_comfort": p.primary_lane_comfort or 0,
