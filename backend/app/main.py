@@ -1059,9 +1059,13 @@ async def admin_get_team_version_detail(version_id: str, x_user_token: Optional[
         raise HTTPException(status_code=404, detail="Team version not found")
 
     members = await team_repo.get_members_by_version(version_id)
+    player_ids = [m.player_id for m in members if m.player_id]
+    participants = await participant_repo.get_by_ids(player_ids)
+    participants_map = {p.id: p for p in participants}
+
     members_with_details = []
     for m in members:
-        p = await participant_repo.get_by_id(m.player_id)
+        p = participants_map.get(m.player_id)
         fairness_breakdown = None
         if m.fairness_breakdown:
             try:
