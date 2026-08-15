@@ -108,9 +108,9 @@ class ParticipantFeatures(BaseModel):
     primary_lane_comfort: int
     secondary_lane_comfort: Optional[int]
     skill_score: float
-    skill_score_breakdown: Optional[Dict[str, float]] = None
+    skill_score_breakdown: Optional[Dict[str, Any]] = None
     role_flexibility_score: float
-    role_flexibility_breakdown: Optional[Dict[str, float]] = None
+    role_flexibility_breakdown: Optional[Dict[str, Any]] = None
     jungle_comfort: float
     exp_comfort: float
     mid_comfort: float
