@@ -30,10 +30,10 @@ from app.api.deps import get_current_user, get_admin_user, create_access_token, 
 
 def _build_skill_breakdown(skill_score: float, current_rank_score: Optional[float], current_star_score: Optional[float], highest_rank_score: Optional[float], highest_star_score: Optional[float]) -> Dict[str, Any]:
     total = skill_score or 0.0
-    cr = current_rank_score if current_rank_score is not None else total * settings.current_rank_weight
-    cs = current_star_score if current_star_score is not None else total * settings.current_star_weight
-    hr = highest_rank_score if highest_rank_score is not None else total * settings.highest_rank_weight
-    hs = highest_star_score if highest_star_score is not None else total * settings.highest_star_weight
+    cr = current_rank_score if current_rank_score is not None else 0.0
+    cs = current_star_score if current_star_score is not None else 0.0
+    hr = highest_rank_score if highest_rank_score is not None else 0.0
+    hs = highest_star_score if highest_star_score is not None else 0.0
 
     raw_total = cr + cs + hr + hs
     components = {
@@ -41,28 +41,28 @@ def _build_skill_breakdown(skill_score: float, current_rank_score: Optional[floa
             "raw_score": round(cr, 4),
             "weight": settings.current_rank_weight,
             "weight_percent": round(settings.current_rank_weight * 100, 2),
-            "contribution": round(cr, 4),
+            "contribution": round(cr * settings.current_rank_weight, 4),
             "formula": f"{round(cr, 4)} × {settings.current_rank_weight} = {round(cr * settings.current_rank_weight, 4)}",
         },
         "current_star": {
             "raw_score": round(cs, 4),
             "weight": settings.current_star_weight,
             "weight_percent": round(settings.current_star_weight * 100, 2),
-            "contribution": round(cs, 4),
+            "contribution": round(cs * settings.current_star_weight, 4),
             "formula": f"{round(cs, 4)} × {settings.current_star_weight} = {round(cs * settings.current_star_weight, 4)}",
         },
         "highest_rank": {
             "raw_score": round(hr, 4),
             "weight": settings.highest_rank_weight,
             "weight_percent": round(settings.highest_rank_weight * 100, 2),
-            "contribution": round(hr, 4),
+            "contribution": round(hr * settings.highest_rank_weight, 4),
             "formula": f"{round(hr, 4)} × {settings.highest_rank_weight} = {round(hr * settings.highest_rank_weight, 4)}",
         },
         "highest_star": {
             "raw_score": round(hs, 4),
             "weight": settings.highest_star_weight,
             "weight_percent": round(settings.highest_star_weight * 100, 2),
-            "contribution": round(hs, 4),
+            "contribution": round(hs * settings.highest_star_weight, 4),
             "formula": f"{round(hs, 4)} × {settings.highest_star_weight} = {round(hs * settings.highest_star_weight, 4)}",
         },
     }

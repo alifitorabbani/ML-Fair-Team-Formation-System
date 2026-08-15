@@ -145,9 +145,8 @@ export default function ResultsPage({ onBack, isAdmin = false }: { onBack?: () =
                         <td className="px-3 py-3 text-center text-gray-300">{p.highest_rank}</td>
                         <td className="px-3 py-3 text-center text-gray-300">{p.highest_stars}</td>
                         <td className="px-3 py-3 text-center text-gray-300">{p.skill_score?.toFixed(1)}</td>
-                        <td className={`px-3 py-3 text-center ${comfortColor(assignedComfort)}`}>{assignedComfort}/5</td>
+                        <td className={`px-3 py-3 text-center ${comfortColor(assignedComfort)}`}>{assignedComfort}/5                        </td>
                       </tr>
-                      <PlayerBreakdownPanel player={p} />
                     </>
                   )
                 })}
@@ -247,11 +246,10 @@ export default function ResultsPage({ onBack, isAdmin = false }: { onBack?: () =
                                 <td className="px-3 py-3 text-center text-gray-300">{player.current_stars}</td>
                                 <td className="px-3 py-3 text-center text-gray-300">{player.highest_rank}</td>
                                 <td className="px-3 py-3 text-center text-gray-300">{player.highest_stars}</td>
-                                <td className="px-3 py-3 text-center text-gray-300">{player.skill_score?.toFixed(1)}</td>
-                                <td className={`px-3 py-3 text-center ${comfortColor(assignedComfort)}`}>{assignedComfort}/5</td>
-                              </tr>
-                              <PlayerBreakdownPanel player={player} />
-                            </>
+                                 <td className="px-3 py-3 text-center text-gray-300">{player.skill_score?.toFixed(1)}</td>
+                                 <td className={`px-3 py-3 text-center ${comfortColor(assignedComfort)}`}>{assignedComfort}/5</td>
+                               </tr>
+                             </>
                           )
                         })}
                       </tbody>
@@ -497,7 +495,6 @@ function TeamSection({ team }: { team: any }) {
                     <td className="px-3 py-3 text-center text-gray-300">{player.skill_score?.toFixed(1)}</td>
                     <td className={`px-3 py-3 text-center ${comfortColor(assignedComfort)}`}>{assignedComfort}/5</td>
                   </tr>
-                  <PlayerBreakdownPanel player={player} />
                 </>
               )
             })}
@@ -664,81 +661,3 @@ function BreakdownPanel({ team }: { team: any }) {
   )
 }
 
-function PlayerBreakdownPanel({ player }: { player: any }) {
-  const skillBreakdown = player?.skill_score_breakdown || {}
-  const roleBreakdown = player?.role_flexibility_breakdown || {}
-
-  const fmt = (v: number | null | undefined, digits = 2) => (v === null || v === undefined || Number.isNaN(v) ? '-' : Number(v).toFixed(digits))
-
-  const skillComponents = skillBreakdown.components || {}
-  const roleComponents = roleBreakdown.components || {}
-
-  const skillCalculation = skillBreakdown.calculation
-  const roleCalculation = roleBreakdown.calculation
-
-  return (
-    <tr key={player.player_id} className={`transition hover:bg-white/5 ${player.is_current_user ? 'bg-brand-500/10' : ''}`}>
-      <td colSpan={11} className="px-3 py-0">
-        <div className="mt-2 space-y-3 rounded-xl border border-white/5 bg-surface-900/60 p-4">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div>
-              <h5 className="mb-2 text-xs font-semibold text-white">Transparansi Skor Keterampilan</h5>
-              <div className="space-y-1.5 text-xs">
-                {Object.entries(skillComponents).map(([key, comp]: [string, any]) => (
-                  <div key={key} className="flex flex-col rounded-lg bg-surface-950/60 px-3 py-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-400">{key.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}</span>
-                      <span className="text-xs text-gray-500">Bobot: {(comp.weight_percent ?? 0).toFixed(0)}%</span>
-                    </div>
-                    <div className="mt-1 flex items-center justify-between text-xs">
-                      <span className="text-gray-300">Raw Score: {fmt(comp.raw_score)}</span>
-                      <span className="text-brand-400">Kontribusi: {fmt(comp.contribution)}</span>
-                    </div>
-                    <div className="mt-1 text-[10px] text-gray-500">
-                      {comp.formula}
-                    </div>
-                  </div>
-                ))}
-                {skillCalculation && (
-                  <div className="mt-2 rounded-lg bg-brand-500/10 px-3 py-2 text-right">
-                    <p className="text-[10px] text-gray-400">Total Skor Keterampilan</p>
-                    <p className="text-sm font-bold text-brand-400">{fmt(skillBreakdown.final_score)}</p>
-                    <p className="text-[10px] text-gray-500">{skillCalculation}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div>
-              <h5 className="mb-2 text-xs font-semibold text-white">Transparansi Fleksibilitas Peran</h5>
-              <div className="space-y-1.5 text-xs">
-                {Object.entries(roleComponents).map(([key, comp]: [string, any]) => (
-                  <div key={key} className="flex flex-col rounded-lg bg-surface-950/60 px-3 py-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-gray-400">{key === 'primary' ? 'Lane Utama' : 'Lane Sekunder'}</span>
-                      <span className="text-xs text-gray-500">Bobot: {(comp.weight_percent ?? 0).toFixed(0)}%</span>
-                    </div>
-                    <div className="mt-1 flex items-center justify-between text-xs">
-                      <span className="text-gray-300">Kenyamanan: {comp.comfort}/5 ({fmt(comp.normalized)}%)</span>
-                      <span className="text-brand-400">Kontribusi: {fmt(comp.contribution)}</span>
-                    </div>
-                    <div className="mt-1 text-[10px] text-gray-500">
-                      {comp.formula}
-                    </div>
-                  </div>
-                ))}
-                {roleCalculation && (
-                  <div className="mt-2 rounded-lg bg-brand-500/10 px-3 py-2 text-right">
-                    <p className="text-[10px] text-gray-400">Skor Fleksibilitas Peran</p>
-                    <p className="text-sm font-bold text-brand-400">{fmt(roleBreakdown.flexibility_score)}%</p>
-                    <p className="text-[10px] text-gray-500">{roleCalculation}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </td>
-    </tr>
-  )
-}
