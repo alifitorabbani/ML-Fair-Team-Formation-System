@@ -403,7 +403,7 @@ class RankingService:
                         },
                     },
                 },
-            ))
+            ).model_dump())
 
         score_components = None
         if active_ranking.score_components:
