@@ -116,22 +116,6 @@ export default function RankingsPage() {
 
   const showUserCard = role === 'user' && myRanking && !searchQuery
 
-  if (loading) {
-    return (
-      <Card>
-        <LoadingSpinner text="Memuat perankingan..." />
-      </Card>
-    )
-  }
-
-  if (error) {
-    return (
-      <Card>
-        <ErrorMessage title="Error" message={error} />
-      </Card>
-    )
-  }
-
   return (
     <div className="animate-fade-in space-y-4">
       {showUserCard && (

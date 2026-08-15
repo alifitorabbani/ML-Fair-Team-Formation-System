@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { getMyTeam, adminGetTeamVersions, getAllTeams, adminGetTeamVersionDetail } from '@/lib/api'
+import { getMyTeam, adminGetTeamVersions, getAllTeams, adminGetTeamVersionDetail, getPaymentStatus } from '@/lib/api'
 import { Clock, Users, TrendingUp, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import LoadingSpinner from '@/components/shared/LoadingSpinner'
 import ErrorMessage from '@/components/shared/ErrorMessage'
@@ -33,7 +33,7 @@ export default function ResultsPage({ onBack, isAdmin = false }: { onBack?: () =
           const [teamData, allTeamsData, paymentData] = await Promise.all([
             getMyTeam(token).catch(() => null),
             getAllTeams(token).catch(() => ({ teams: [], all_paid: false })),
-            import('@/lib/api').then(m => m.getPaymentStatus(token)).catch(() => null),
+            getPaymentStatus(token).catch(() => null),
           ])
           setUserTeam(teamData)
           setAllTeams(allTeamsData.teams || [])

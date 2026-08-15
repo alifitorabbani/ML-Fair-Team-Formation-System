@@ -4,6 +4,7 @@ from fastapi import Header
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import text
 import asyncio
 import pandas as pd
 import json
@@ -187,6 +188,24 @@ async def lifespan(app: FastAPI):
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            await conn.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_payments_created_at ON payments(created_at DESC)")
+            )
+            await conn.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_team_members_team_id ON team_members(team_id)")
+            )
+            await conn.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_participants_status_rank ON participants(status, rank)")
+            )
+            await conn.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_payments_status_created_at ON payments(status, created_at DESC)")
+            )
+            await conn.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_team_members_version_team ON team_members(team_version_id, team_id)")
+            )
+            await conn.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_audit_logs_action_timestamp ON audit_logs(action, timestamp DESC)")
+            )
     except Exception as e:
         print(f"Startup warning: database initialization failed: {e}")
     yield
@@ -500,48 +519,52 @@ async def get_my_team(x_user_token: Optional[str] = Header(None), db: AsyncSessi
         }
 
     my_team_members = [m for m in members if m.team_id == my_member.team_id]
+    team_player_ids = [m.player_id for m in my_team_members]
+    team_participants = await participant_repo.get_by_ids(team_player_ids)
+    participants_map = {p.id: p for p in team_participants}
     team_players = []
     for m in my_team_members:
-        p = await repo.get_by_id(m.player_id)
-        if p:
-            import ast
-            lane_caps = {}
-            if p.lane_capabilities:
-                try:
-                    lane_caps = ast.literal_eval(p.lane_capabilities)
-                except Exception:
-                    lane_caps = {}
-            team_players.append({
-                "player_id": m.player_id,
-                "name": p.name,
-                "full_name": p.name,
-                "email": p.email,
-                "username": p.username,
-                "assigned_lane": m.assigned_lane,
-                "current_rank": p.current_rank,
-                "current_stars": p.current_stars,
-                "highest_rank": p.highest_rank,
-                "highest_stars": p.highest_stars,
-                "primary_lane": p.primary_lane,
-                "secondary_lane": p.secondary_lane,
-                "primary_lane_comfort": p.primary_lane_comfort or 0,
-                "secondary_lane_comfort": p.secondary_lane_comfort or 0,
-                "comfort_in_assigned_lane": m.comfort_in_assigned_lane or 0,
-                "skill_score": p.skill_score or 0.0,
-                "role_flexibility_score": p.role_flexibility_score or 0.0,
-                "assignment_reason": m.assignment_reason,
-                "role_compatibility_score": m.role_compatibility_score,
-                "lane_capabilities": lane_caps,
-                "skill_score_breakdown": _build_skill_breakdown(
-                    p.skill_score or 0.0,
-                    p.current_rank_score,
-                    p.current_star_score,
-                    p.highest_rank_score,
-                    p.highest_star_score,
-                ),
-                "role_flexibility_breakdown": _build_role_breakdown(p.primary_lane_comfort, p.secondary_lane_comfort),
-                "fairness_breakdown": json.loads(m.fairness_breakdown) if m.fairness_breakdown else None,
-            })
+        p = participants_map.get(m.player_id)
+        if not p:
+            continue
+        import ast
+        lane_caps = {}
+        if p.lane_capabilities:
+            try:
+                lane_caps = ast.literal_eval(p.lane_capabilities)
+            except Exception:
+                lane_caps = {}
+        team_players.append({
+            "player_id": m.player_id,
+            "name": p.name,
+            "full_name": p.name,
+            "email": p.email,
+            "username": p.username,
+            "assigned_lane": m.assigned_lane,
+            "current_rank": p.current_rank,
+            "current_stars": p.current_stars,
+            "highest_rank": p.highest_rank,
+            "highest_stars": p.highest_stars,
+            "primary_lane": p.primary_lane,
+            "secondary_lane": p.secondary_lane,
+            "primary_lane_comfort": p.primary_lane_comfort or 0,
+            "secondary_lane_comfort": p.secondary_lane_comfort or 0,
+            "comfort_in_assigned_lane": m.comfort_in_assigned_lane or 0,
+            "skill_score": p.skill_score or 0.0,
+            "role_flexibility_score": p.role_flexibility_score or 0.0,
+            "assignment_reason": m.assignment_reason,
+            "role_compatibility_score": m.role_compatibility_score,
+            "lane_capabilities": lane_caps,
+            "skill_score_breakdown": _build_skill_breakdown(
+                p.skill_score or 0.0,
+                p.current_rank_score,
+                p.current_star_score,
+                p.highest_rank_score,
+                p.highest_star_score,
+            ),
+            "role_flexibility_breakdown": _build_role_breakdown(p.primary_lane_comfort, p.secondary_lane_comfort),
+            "fairness_breakdown": json.loads(m.fairness_breakdown) if m.fairness_breakdown else None,
+        })
 
     sample_fairness = next((m for m in my_team_members if m.fairness_breakdown), None)
     fairness_breakdown = json.loads(sample_fairness.fairness_breakdown) if sample_fairness and sample_fairness.fairness_breakdown else None
@@ -632,6 +655,10 @@ async def admin_generate_ranking(request: AdminGenerateRankingRequest, x_user_to
 async def admin_ranking_preview(x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)):
     _require_admin(x_user_token)
 
+    cached = cache.get("admin_ranking_preview")
+    if cached is not None:
+        return JSONResponse(content=cached, headers={"Cache-Control": "public, max-age=10"})
+
     from app.repositories.participant_repository import ParticipantRepository
     from app.repositories.ranking_repository import RankingRepository
     from app.repositories.system_state_repository import SystemStateRepository
@@ -663,7 +690,7 @@ async def admin_ranking_preview(x_user_token: Optional[str] = Header(None), db: 
     cache.invalidate("rankings_public")
     cache.invalidate("admin_ranking_versions")
     cache.invalidate("system_state")
-    return {
+    response = {
         "rankings": [r.dict() for r in result.get("rankings", [])],
         "total": result.get("total", 0),
         "qualified_count": result.get("qualified_count", 0),
@@ -672,6 +699,8 @@ async def admin_ranking_preview(x_user_token: Optional[str] = Header(None), db: 
         "preview_generated_at": result.get("generated_at"),
         "ranking_version_id": result.get("ranking_version_id"),
     }
+    cache.set("admin_ranking_preview", response, ttl_seconds=10)
+    return JSONResponse(content=response, headers={"Cache-Control": "public, max-age=10"})
 
 
 @app.post("/api/admin/confirm-ranking")
@@ -784,16 +813,40 @@ async def admin_dashboard(x_user_token: Optional[str] = Header(None), db: AsyncS
     from app.repositories.system_state_repository import SystemStateRepository
     from app.schemas.schemas import SystemState as SystemStateEnum
 
+    from sqlalchemy import select, func, desc, case
+    from app.models.models import Payment, ParticipantDB
+
     participant_repo = ParticipantRepository(db)
     ranking_repo = RankingRepository(db)
     team_repo = TeamRepository(db)
     payment_repo = PaymentRepository(db)
     system_state_repo = SystemStateRepository(db)
 
-    total_participants = await participant_repo.count()
-    processed_participants = await participant_repo.count_processed()
-    qualified_count = await participant_repo.count_by_status("QUALIFIED")
-    eliminated_count = await participant_repo.count_by_status("ELIMINATED")
+    participant_stats = await db.execute(
+        select(
+            func.count().label("total"),
+            func.sum(case((ParticipantDB.skill_score.is_not(None), 1), else_=0)).label("processed"),
+            func.sum(case((ParticipantDB.status == "QUALIFIED", 1), else_=0)).label("qualified"),
+            func.sum(case((ParticipantDB.status == "ELIMINATED", 1), else_=0)).label("eliminated"),
+        ).select_from(ParticipantDB)
+    )
+    stats_row = participant_stats.one_or_none()
+    total_participants = stats_row.total or 0
+    processed_participants = stats_row.processed or 0
+    qualified_count = stats_row.qualified or 0
+    eliminated_count = stats_row.eliminated or 0
+
+    payment_stats = await db.execute(
+        select(
+            func.sum(case((Payment.status == "PENDING", 1), else_=0)).label("pending"),
+            func.sum(case((Payment.status == "PAID", 1), else_=0)).label("paid"),
+            func.sum(case((Payment.status == "FAILED", 1), else_=0)).label("failed"),
+        ).select_from(Payment)
+    )
+    payment_row = payment_stats.one_or_none()
+    payment_pending = payment_row.pending or 0
+    payment_verified = payment_row.paid or 0
+    payment_failed = payment_row.failed or 0
 
     active_ranking = await ranking_repo.get_active()
     ranking_generated = active_ranking is not None
@@ -801,10 +854,6 @@ async def admin_dashboard(x_user_token: Optional[str] = Header(None), db: AsyncS
     active_team = await team_repo.get_active()
     team_generated = active_team is not None
     total_teams = active_team.total_teams if active_team else 0
-
-    payment_pending = await payment_repo.count_by_status("PENDING")
-    payment_verified = await payment_repo.count_by_status("PAID")
-    payment_failed = await payment_repo.count_by_status("FAILED")
 
     state = await system_state_repo.get_or_create()
 
@@ -854,11 +903,10 @@ async def admin_generate_team(request: AdminGenerateTeamRequest, x_user_token: O
             raise HTTPException(status_code=400, detail="Tidak ada peserta yang lolos kualifikasi.")
 
         payment_repo = PaymentRepository(db)
-        unpaid = []
-        for p in qualified:
-            payment = await payment_repo.get_by_player_id(p.id)
-            if not payment or payment.status != "PAID":
-                unpaid.append(p.name or p.id)
+        qualified_ids = [p.id for p in qualified]
+        payments = await payment_repo.get_by_player_ids(qualified_ids)
+        paid_ids = {p.player_id for p in payments if p.status == "PAID"}
+        unpaid = [p.name or p.id for p in qualified if p.id not in paid_ids]
         if unpaid:
             await audit_repo.create(
                 action="TEAM_GENERATED_WITH_UNPAID",
@@ -1209,7 +1257,7 @@ async def admin_get_payments(x_user_token: Optional[str] = Header(None), db: Asy
     payments = list(payments_result.scalars().all())
 
     participant_ids = [p.player_id for p in payments if p.player_id]
-    participants = await participant_repo.get_all()
+    participants = await participant_repo.get_by_ids(participant_ids)
     participant_map = {p.id: p for p in participants}
 
     result = []
@@ -1498,12 +1546,11 @@ async def get_all_teams(x_user_token: Optional[str] = Header(None), db: AsyncSes
     current_player_id = decode_token(x_user_token)["sub"]
     current_role = decode_token(x_user_token).get("role", "user")
 
-    versions = await team_repo.get_all()
-    active = [v for v in versions if v.is_active]
+    active = await team_repo.get_active()
     if not active:
         return {"teams": [], "current_user_id": current_player_id, "current_role": current_role, "all_paid": False}
 
-    latest = sorted(active, key=lambda v: v.generated_at, reverse=True)[0]
+    latest = active
     members = await team_repo.get_members_by_version(latest.id)
     player_ids = [m.player_id for m in members if m.player_id]
     participants = await participant_repo.get_by_ids(player_ids)
