@@ -14,6 +14,7 @@ import {
   adminGetAuditLog,
   adminGetRankingVersions,
   adminGetTeamVersions,
+  adminSeedPayments,
 } from '@/lib/api'
 import { AdminDashboardStats, PaymentResponse, AuditLogResponse, RankingVersionResponse, TeamVersionResponse } from '@/types'
 import { Trophy, Users, Mail, DollarSign, Shield, Activity, RefreshCw, CheckCircle, XCircle, Clock, AlertTriangle } from 'lucide-react'
@@ -45,6 +46,7 @@ export default function AdminDashboard({
   const [loading, setLoading] = useState(true)
   const [generatingRanking, setGeneratingRanking] = useState(false)
   const [generatingTeam, setGeneratingTeam] = useState(false)
+  const [seedingPayments, setSeedingPayments] = useState(false)
   const [rankingPreview, setRankingPreview] = useState<any>(null)
   const [payments, setPayments] = useState<PaymentResponse[]>([])
   const [auditLogs, setAuditLogs] = useState<AuditLogResponse[]>([])
@@ -197,6 +199,23 @@ export default function AdminDashboard({
     }
   }
 
+  const handleSeedPayments = async () => {
+    setSeedingPayments(true)
+    setVerifyError(null)
+    setVerifySuccess(null)
+    try {
+      const result = await adminSeedPayments(token || '')
+      alert(`Berhasil membuat ${result.inserted_count} data pembayaran dummy dari ${result.total_qualified} peserta lolos kualifikasi.`)
+      loadDashboard()
+    } catch (err) {
+      if (!handleAdminError(err)) {
+        alert(err instanceof Error ? err.message : 'Gagal membuat data pembayaran dummy')
+      }
+    } finally {
+      setSeedingPayments(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -288,6 +307,13 @@ export default function AdminDashboard({
                   </span>
                 ) : null
               }
+            />
+            <ActionCard
+              title="Isi Data Pembayaran Dummy"
+              description="Buat data pembayaran PAID untuk semua peserta qualified (untuk testing)"
+              onClick={handleSeedPayments}
+              loading={seedingPayments}
+              icon={<DollarSign className="h-5 w-5" />}
             />
           </div>
 

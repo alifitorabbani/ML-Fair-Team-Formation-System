@@ -208,6 +208,22 @@ export async function adminGetDashboard(token: string): Promise<AdminDashboardSt
   return response.json()
 }
 
+export async function adminSeedPayments(token: string): Promise<{ inserted_count: number; total_qualified: number }> {
+  const response = await fetch(`${API_BASE}/api/admin/seed-payments`, {
+    method: 'POST',
+    headers: {
+      'X-User-Token': token,
+    },
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to seed payments')
+  }
+
+  return response.json()
+}
+
 export async function adminVerifyPayment(token: string, playerId: string, status: string, transactionId?: string, notes?: string): Promise<any> {
   const response = await fetch(`${API_BASE}/api/admin/verify-payment`, {
     method: 'POST',
