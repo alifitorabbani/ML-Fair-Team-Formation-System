@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { getMyRanking, adminRankingPreview, getAllRankings } from '@/lib/api'
+import { getMyRanking, adminRankingPreview, getAllRankings, adminGetRankings } from '@/lib/api'
 import { Trophy, User, Star, Shield, Target, ChevronDown, ChevronUp, Clock, Medal } from 'lucide-react'
 import LoadingSpinner from '@/components/shared/LoadingSpinner'
 import ErrorMessage from '@/components/shared/ErrorMessage'
@@ -41,7 +41,7 @@ export default function RankingsPage() {
         setPage(0)
 
         if (role === 'admin') {
-          const data = await adminRankingPreview(token)
+          const data = await adminGetRankings(token)
           setRankings(data.rankings || [])
         } else {
           const [allData, myData] = await Promise.all([

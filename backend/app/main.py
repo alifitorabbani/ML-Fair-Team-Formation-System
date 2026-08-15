@@ -664,6 +664,33 @@ async def admin_confirm_ranking(ranking_version_id: str = Query(...), x_user_tok
     return result
 
 
+@app.get("/api/admin/rankings")
+async def admin_get_rankings(x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)):
+    _require_admin(x_user_token)
+
+    from app.repositories.participant_repository import ParticipantRepository
+    from app.repositories.ranking_repository import RankingRepository
+    from app.repositories.system_state_repository import SystemStateRepository
+    from app.repositories.audit_repository import AuditRepository
+
+    participant_repo = ParticipantRepository(db)
+    ranking_repo = RankingRepository(db)
+    system_state_repo = SystemStateRepository(db)
+    audit_repo = AuditRepository(db)
+
+    ranking_service = RankingService(
+        participant_repo=participant_repo,
+        ranking_repo=ranking_repo,
+        system_state_repo=system_state_repo,
+        audit_repo=audit_repo,
+        payment_repo=PaymentRepository(db),
+        team_service=service,
+    )
+
+    result = await ranking_service.get_rankings()
+    return result
+
+
 @app.get("/api/admin/ranking-versions")
 async def admin_get_ranking_versions(x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)):
     _require_admin(x_user_token)

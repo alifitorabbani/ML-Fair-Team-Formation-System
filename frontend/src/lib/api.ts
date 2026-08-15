@@ -143,6 +143,21 @@ export async function adminRankingPreview(token: string): Promise<any> {
   return response.json()
 }
 
+export async function adminGetRankings(token: string): Promise<any> {
+  const response = await fetch(`${API_BASE}/api/admin/rankings`, {
+    headers: {
+      'X-User-Token': token,
+    },
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to fetch rankings')
+  }
+
+  return response.json()
+}
+
 export async function adminConfirmRanking(token: string, rankingVersionId: string): Promise<any> {
   const response = await fetch(`${API_BASE}/api/admin/confirm-ranking?ranking_version_id=${rankingVersionId}`, {
     method: 'POST',
