@@ -265,7 +265,7 @@ class RankingService:
             "status": ranking_version.status,
         }
 
-    async def get_rankings(self, page: int = 1, page_size: int = 20) -> Dict[str, Any]:
+    async def get_rankings(self, page: int = 1, page_size: int = 9999) -> Dict[str, Any]:
         state_ok = await self.system_state_repo.get_or_create()
         if state_ok.state == SystemStateEnum.draft.value:
             return {

@@ -27,7 +27,7 @@ export default function RankingsPage() {
   const [expandedPlayer, setExpandedPlayer] = useState<string | null>(null)
   const [showStatus, setShowStatus] = useState(true)
   const [page, setPage] = useState(0)
-  const pageSize = 20
+  const pageSize = 9999
   const role = getUserRole()
   const token = useAuthToken()
 
