@@ -379,6 +379,32 @@ class RankingService:
                     "primary_comfort": p.primary_lane_comfort or 0,
                     "secondary_comfort": p.secondary_lane_comfort or 0,
                     "normalized_primary": ((p.primary_lane_comfort or 0) / 5.0) * 100,
+                    "normalized_secondary": ((p.secondary_lane_comfort or 0) / 5.0) * 100 if p.secondary_lane_comfort else 0.0,
+                    "primary_weight": 0.70,
+                    "secondary_weight": 0.30,
+                    "primary_weight_percent": 70.0,
+                    "secondary_weight_percent": 30.0,
+                    "primary_contribution": round(((p.primary_lane_comfort or 0) / 5.0) * 100 * 0.70, 4),
+                    "secondary_contribution": round(((p.secondary_lane_comfort or 0) / 5.0) * 100 * 0.30, 4) if p.secondary_lane_comfort else 0.0,
+                    "flexibility_score": round((((p.primary_lane_comfort or 0) / 5.0) * 100 * 0.70) + (((p.secondary_lane_comfort or 0) / 5.0) * 100 * 0.30), 4) if p.secondary_lane_comfort else round(((p.primary_lane_comfort or 0) / 5.0) * 100 * 0.70, 4),
+                    "components": {
+                        "primary": {
+                            "comfort": p.primary_lane_comfort or 0,
+                            "normalized": round(((p.primary_lane_comfort or 0) / 5.0) * 100, 2),
+                            "weight": 0.70,
+                            "weight_percent": 70.0,
+                            "contribution": round(((p.primary_lane_comfort or 0) / 5.0) * 100 * 0.70, 4),
+                            "formula": f"{((p.primary_lane_comfort or 0) / 5.0) * 100:.2f}% × 0.70 = {round(((p.primary_lane_comfort or 0) / 5.0) * 100 * 0.70, 4)}",
+                        },
+                        "secondary": {
+                            "comfort": p.secondary_lane_comfort or 0,
+                            "normalized": round(((p.secondary_lane_comfort or 0) / 5.0) * 100, 2) if p.secondary_lane_comfort else 0.0,
+                            "weight": 0.30,
+                            "weight_percent": 30.0,
+                            "contribution": round(((p.secondary_lane_comfort or 0) / 5.0) * 100 * 0.30, 4) if p.secondary_lane_comfort else 0.0,
+                            "formula": f"{((p.secondary_lane_comfort or 0) / 5.0) * 100:.2f}% × 0.30 = {round(((p.secondary_lane_comfort or 0) / 5.0) * 100 * 0.30, 4)}" if p.secondary_lane_comfort else "0.00% × 0.30 = 0.0000",
+                        },
+                    },
                 },
             ))
 
