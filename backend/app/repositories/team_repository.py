@@ -71,6 +71,11 @@ class TeamRepository:
         await self.db.flush()
         return member
 
+    async def bulk_add_members(self, members: List[TeamMember]) -> None:
+        if members:
+            self.db.add_all(members)
+            await self.db.flush()
+
     async def get_members_by_version(self, version_id: str) -> List[TeamMember]:
         result = await self.db.execute(
             select(TeamMember).where(TeamMember.team_version_id == version_id)

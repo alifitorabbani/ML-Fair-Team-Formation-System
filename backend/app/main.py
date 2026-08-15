@@ -28,15 +28,12 @@ from app.services.storage_service import storage_service
 from app.api.deps import get_current_user, get_admin_user, create_access_token, decode_token
 
 
-def _build_skill_breakdown(skill_score: float, current_rank_score: Optional[float], current_star_score: Optional[float], highest_rank_score: Optional[float], highest_star_score: Optional[float]) -> Optional[Dict[str, Any]]:
+def _build_skill_breakdown(skill_score: float, current_rank_score: Optional[float], current_star_score: Optional[float], highest_rank_score: Optional[float], highest_star_score: Optional[float]) -> Dict[str, Any]:
     total = skill_score or 0.0
     cr = current_rank_score if current_rank_score is not None else total * settings.current_rank_weight
     cs = current_star_score if current_star_score is not None else total * settings.current_star_weight
     hr = highest_rank_score if highest_rank_score is not None else total * settings.highest_rank_weight
     hs = highest_star_score if highest_star_score is not None else total * settings.highest_star_weight
-
-    if not any([cr, cs, hr, hs]):
-        return None
 
     raw_total = cr + cs + hr + hs
     components = {
@@ -874,9 +871,10 @@ async def admin_generate_team(request: AdminGenerateTeamRequest, x_user_token: O
             processing_time_ms=round(processing_time, 2),
         )
 
+        members = []
         for team in teams:
             for player in team.players:
-                member = TeamMember(
+                members.append(TeamMember(
                     id=str(uuid4()),
                     team_version_id=version_id,
                     team_id=team.team_id,
@@ -889,8 +887,8 @@ async def admin_generate_team(request: AdminGenerateTeamRequest, x_user_token: O
                     role_balance_score=team.role_balance_score,
                     overall_fairness=team.overall_fairness,
                     fairness_breakdown=json.dumps(team.fairness_breakdown) if team.fairness_breakdown else None,
-                )
-                await team_repo.add_member(member)
+                ))
+        await team_repo.bulk_add_members(members)
 
         await audit_repo.create(
             action="TEAM_GENERATED",

@@ -26,6 +26,8 @@ export default function RankingsPage() {
   const [sortBy, setSortBy] = useState<'rank' | 'skill' | 'rank_tier'>('rank')
   const [expandedPlayer, setExpandedPlayer] = useState<string | null>(null)
   const [showStatus, setShowStatus] = useState(true)
+  const [page, setPage] = useState(0)
+  const pageSize = 20
   const role = getUserRole()
   const token = useAuthToken()
 
@@ -36,6 +38,7 @@ export default function RankingsPage() {
       try {
         setLoading(true)
         setError(null)
+        setPage(0)
 
         if (role === 'admin') {
           const data = await adminRankingPreview(token)
@@ -91,6 +94,10 @@ export default function RankingsPage() {
       return 0
     })
 
+  const totalPages = Math.max(1, Math.ceil(filteredRankings.length / pageSize))
+  const safePage = Math.min(page, totalPages - 1)
+  const paginatedRankings = filteredRankings.slice(safePage * pageSize, (safePage + 1) * pageSize)
+
   if (loading) {
     return (
       <Card>
@@ -137,7 +144,7 @@ export default function RankingsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
-                {filteredRankings.map((player) => {
+                {paginatedRankings.map((player) => {
                   const globalRank = player.rank || 0
                   const isMe = player.is_current_user
                   const isExpanded = expandedPlayer === player.player_id
@@ -289,6 +296,27 @@ export default function RankingsPage() {
               </tbody>
             </table>
           </div>
+          {totalPages > 1 && (
+            <div className="mt-4 flex items-center justify-between">
+              <button
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={safePage === 0}
+                className="rounded-xl border border-white/10 bg-surface-900/60 px-4 py-2 text-xs font-medium text-gray-300 transition hover:border-brand-500/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                ← Sebelumnya
+              </button>
+              <span className="text-xs text-gray-400">
+                Halaman {safePage + 1} dari {totalPages} • {filteredRankings.length} pemain
+              </span>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                disabled={safePage >= totalPages - 1}
+                className="rounded-xl border border-white/10 bg-surface-900/60 px-4 py-2 text-xs font-medium text-gray-300 transition hover:border-brand-500/40 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Selanjutnya →
+              </button>
+            </div>
+          )}
           {filteredRankings.length === 0 && (
             <div className="py-8 text-center text-sm text-gray-500">Tidak ada pemain yang cocok dengan pencarian "{searchQuery}"</div>
           )}
@@ -379,7 +407,7 @@ export default function RankingsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              {filteredRankings.map((player) => {
+              {paginatedRankings.map((player) => {
                 const globalRank = player.rank || 0
                 const isExpanded = expandedPlayer === player.player_id
                 const isMe = player.is_current_user
