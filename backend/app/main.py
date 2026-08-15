@@ -1192,7 +1192,7 @@ async def admin_get_payments(x_user_token: Optional[str] = Header(None), db: Asy
 
     from app.repositories.payment_repository import PaymentRepository
     from app.repositories.participant_repository import ParticipantRepository
-    from sqlalchemy import select, func
+    from sqlalchemy import select, func, desc
     from app.models.models import Payment, ParticipantDB
 
     payment_repo = PaymentRepository(db)
