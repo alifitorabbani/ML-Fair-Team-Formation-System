@@ -453,7 +453,7 @@ async def get_my_team(x_user_token: Optional[str] = Header(None), db: AsyncSessi
         return {
             "team_id": None,
             "team": None,
-            "message": "Pembayaran belum diverifikasi. Tim belum dapat dilihat.",
+            "message": "Pembayaran belum dilakukan. Silakan upload bukti pembayaran untuk melihat tim.",
         }
 
     participant_repo = ParticipantRepository(db)
@@ -1400,7 +1400,7 @@ async def submit_payment(
     payment_repo = PaymentRepository(db)
     payment = await payment_repo.create_or_update(
         player_id=player_id,
-        status="PENDING",
+        status="PAID",
         amount=settings.payment_amount,
         method=settings.payment_method,
         notes=notes or f"Proof uploaded: {proof.filename}",
