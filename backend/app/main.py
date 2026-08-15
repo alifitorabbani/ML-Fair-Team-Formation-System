@@ -340,6 +340,7 @@ async def admin_process_participants(x_user_token: Optional[str] = Header(None),
         count = len(await repo.get_all())
         cache.invalidate("admin_dashboard")
         cache.invalidate("admin_rankings")
+        cache.invalidate("rankings_public")
         cache.invalidate("admin_ranking_versions")
         cache.invalidate("admin_payments")
         cache.invalidate("admin_audit_log")
@@ -660,6 +661,7 @@ async def admin_ranking_preview(x_user_token: Optional[str] = Header(None), db: 
 
     cache.invalidate("admin_dashboard")
     cache.invalidate("admin_rankings")
+    cache.invalidate("rankings_public")
     cache.invalidate("admin_ranking_versions")
     cache.invalidate("system_state")
     return {
@@ -702,13 +704,14 @@ async def admin_confirm_ranking(ranking_version_id: str = Query(...), x_user_tok
 
     cache.invalidate("admin_dashboard")
     cache.invalidate("admin_rankings")
+    cache.invalidate("rankings_public")
     cache.invalidate("admin_ranking_versions")
     cache.invalidate("system_state")
     return result
 
 
 @app.get("/api/admin/rankings")
-async def admin_get_rankings(x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)):
+async def admin_get_rankings(x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db), page: int = 1, page_size: int = 1000):
     _require_admin(x_user_token)
 
     from app.repositories.participant_repository import ParticipantRepository
@@ -730,7 +733,7 @@ async def admin_get_rankings(x_user_token: Optional[str] = Header(None), db: Asy
         team_service=service,
     )
 
-    result = await ranking_service.get_rankings()
+    result = await ranking_service.get_rankings(page=page, page_size=page_size)
     return result
 
 
@@ -788,11 +791,10 @@ async def admin_dashboard(x_user_token: Optional[str] = Header(None), db: AsyncS
     payment_repo = PaymentRepository(db)
     system_state_repo = SystemStateRepository(db)
 
-    all_participants = await participant_repo.get_all()
-    total_participants = len(all_participants)
-    processed_participants = sum(1 for p in all_participants if p.skill_score is not None)
-    qualified_count = sum(1 for p in all_participants if p.status == "QUALIFIED")
-    eliminated_count = sum(1 for p in all_participants if p.status == "ELIMINATED")
+    total_participants = await participant_repo.count()
+    processed_participants = await participant_repo.count_processed()
+    qualified_count = await participant_repo.count_by_status("QUALIFIED")
+    eliminated_count = await participant_repo.count_by_status("ELIMINATED")
 
     active_ranking = await ranking_repo.get_active()
     ranking_generated = active_ranking is not None
@@ -801,10 +803,9 @@ async def admin_dashboard(x_user_token: Optional[str] = Header(None), db: AsyncS
     team_generated = active_team is not None
     total_teams = active_team.total_teams if active_team else 0
 
-    payment_stats = await payment_repo.get_all()
-    payment_pending = sum(1 for p in payment_stats if p.status == "PENDING")
-    payment_verified = sum(1 for p in payment_stats if p.status == "PAID")
-    payment_failed = sum(1 for p in payment_stats if p.status == "FAILED")
+    payment_pending = await payment_repo.count_by_status("PENDING")
+    payment_verified = await payment_repo.count_by_status("PAID")
+    payment_failed = await payment_repo.count_by_status("FAILED")
 
     state = await system_state_repo.get_or_create()
 
@@ -990,6 +991,7 @@ async def admin_generate_team(request: AdminGenerateTeamRequest, x_user_token: O
 
         cache.invalidate("admin_dashboard")
         cache.invalidate("admin_rankings")
+        cache.invalidate("rankings_public")
         cache.invalidate("admin_ranking_versions")
         cache.invalidate("admin_team_versions")
         cache.invalidate("system_state")
@@ -1161,6 +1163,7 @@ async def admin_verify_payment(request: PaymentVerificationRequest, x_user_token
     cache.invalidate("admin_dashboard")
     cache.invalidate("admin_payments")
     cache.invalidate("admin_team_versions")
+    cache.invalidate("rankings_public")
     cache.invalidate("system_state")
     return {
         "success": True,
@@ -1177,18 +1180,32 @@ async def admin_verify_payment(request: PaymentVerificationRequest, x_user_token
 
 
 @app.get("/api/admin/payments")
-async def admin_get_payments(x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)):
+async def admin_get_payments(x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db), page: int = 1, limit: int = 50):
     _require_admin(x_user_token)
 
-    cached = cache.get("admin_payments")
+    cached = cache.get(f"admin_payments_{page}_{limit}")
     if cached is not None:
         return JSONResponse(content=cached, headers={"Cache-Control": "public, max-age=15"})
 
     from app.repositories.payment_repository import PaymentRepository
     from app.repositories.participant_repository import ParticipantRepository
+    from sqlalchemy import select, func
+    from app.models.models import Payment, ParticipantDB
+
     payment_repo = PaymentRepository(db)
     participant_repo = ParticipantRepository(db)
-    payments = await payment_repo.get_all()
+
+    offset = (page - 1) * limit
+
+    total_result = await db.execute(select(func.count()).select_from(Payment))
+    total_payments = total_result.scalar_one() or 0
+
+    payments_result = await db.execute(
+        select(Payment).order_by(desc(Payment.created_at)).limit(limit).offset(offset)
+    )
+    payments = list(payments_result.scalars().all())
+
+    participant_ids = [p.player_id for p in payments if p.player_id]
     participants = await participant_repo.get_all()
     participant_map = {p.id: p for p in participants}
 
@@ -1214,8 +1231,15 @@ async def admin_get_payments(x_user_token: Optional[str] = Header(None), db: Asy
             "current_stars": participant.current_stars if participant else 0,
             "primary_lane": participant.primary_lane if participant else "",
         })
-    response = {"payments": result}
-    cache.set("admin_payments", response, ttl_seconds=15)
+
+    response = {
+        "payments": result,
+        "total": total_payments,
+        "page": page,
+        "limit": limit,
+        "total_pages": (total_payments + limit - 1) // limit,
+    }
+    cache.set(f"admin_payments_{page}_{limit}", response, ttl_seconds=15)
     return JSONResponse(content=response, headers={"Cache-Control": "public, max-age=15"})
 
 
@@ -1232,6 +1256,7 @@ async def admin_delete_payment(payment_id: str, x_user_token: Optional[str] = He
     cache.invalidate("admin_dashboard")
     cache.invalidate("admin_payments")
     cache.invalidate("admin_team_versions")
+    cache.invalidate("rankings_public")
     cache.invalidate("system_state")
     return {"success": True}
 
@@ -1373,63 +1398,42 @@ async def get_my_payment_status(x_user_token: Optional[str] = Header(None), db: 
 
 
 @app.get("/api/rankings")
-async def get_all_rankings(x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)):
+async def get_all_rankings(x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db), page: int = 1, page_size: int = 1000):
     _require_user(x_user_token)
 
-    from app.repositories.participant_repository import ParticipantRepository
-    participant_repo = ParticipantRepository(db)
-    participants = await participant_repo.get_all()
-    qualified = [p for p in participants if p.status == "QUALIFIED"]
-    qualified.sort(key=lambda p: (p.rank if p.rank else 9999))
+    cache_key = f"rankings_public_{page}_{page_size}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return JSONResponse(content=cached, headers={"Cache-Control": "public, max-age=30"})
 
+    from app.repositories.participant_repository import ParticipantRepository
+    from app.repositories.ranking_repository import RankingRepository
+    from app.repositories.system_state_repository import SystemStateRepository
+    from app.repositories.audit_repository import AuditRepository
+    from app.services.ranking_service import RankingService
+
+    participant_repo = ParticipantRepository(db)
+    ranking_repo = RankingRepository(db)
+    system_state_repo = SystemStateRepository(db)
+    audit_repo = AuditRepository(db)
+
+    ranking_service = RankingService(
+        participant_repo=participant_repo,
+        ranking_repo=ranking_repo,
+        system_state_repo=system_state_repo,
+        audit_repo=audit_repo,
+        payment_repo=PaymentRepository(db),
+        team_service=service,
+    )
+
+    result = await ranking_service.get_rankings(page=page, page_size=page_size)
     current_player_id = decode_token(x_user_token)["sub"]
     current_role = decode_token(x_user_token).get("role", "user")
+    result["current_user_id"] = current_player_id
+    result["current_role"] = current_role
 
-    rankings = []
-    for idx, p in enumerate(qualified, start=1):
-        lane_caps = {}
-        if p.lane_capabilities:
-            try:
-                lane_caps = ast.literal_eval(p.lane_capabilities)
-            except Exception:
-                lane_caps = {}
-        rankings.append({
-            "rank": idx,
-            "player_id": p.id,
-            "full_name": p.name,
-            "name": p.name,
-            "email": p.email,
-            "username": p.username,
-            "current_rank": p.current_rank,
-            "current_stars": p.current_stars,
-            "highest_rank": p.highest_rank,
-            "highest_stars": p.highest_stars,
-            "primary_lane": p.primary_lane,
-            "secondary_lane": p.secondary_lane,
-            "primary_lane_comfort": p.primary_lane_comfort or 0,
-            "secondary_lane_comfort": p.secondary_lane_comfort or 0,
-            "skill_score": p.skill_score or 0.0,
-            "role_flexibility_score": p.role_flexibility_score or 0.0,
-            "lane_capabilities": lane_caps,
-            "status": p.status,
-            "is_current_user": p.id == current_player_id,
-            "current_role": current_role,
-            "skill_score_breakdown": _build_skill_breakdown(
-                p.skill_score or 0.0,
-                p.current_rank_score,
-                p.current_star_score,
-                p.highest_rank_score,
-                p.highest_star_score,
-            ),
-            "role_flexibility_breakdown": _build_role_breakdown(p.primary_lane_comfort, p.secondary_lane_comfort),
-        })
-
-    return {
-        "rankings": rankings,
-        "total": len(rankings),
-        "current_user_id": current_player_id,
-        "current_role": current_role,
-    }
+    cache.set(cache_key, result, ttl_seconds=30)
+    return JSONResponse(content=result, headers={"Cache-Control": "public, max-age=30"})
 
 
 @app.get("/api/teams")

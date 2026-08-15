@@ -265,7 +265,7 @@ class RankingService:
             "status": ranking_version.status,
         }
 
-    async def get_rankings(self) -> Dict[str, Any]:
+    async def get_rankings(self, page: int = 1, page_size: int = 20) -> Dict[str, Any]:
         state_ok = await self.system_state_repo.get_or_create()
         if state_ok.state == SystemStateEnum.draft.value:
             return {
@@ -290,14 +290,11 @@ class RankingService:
                 "status": "NOT_AVAILABLE",
             }
 
-        participants = await self.participant_repo.get_all()
-        ranked = sorted(
-            [p for p in participants if p.rank is not None],
-            key=lambda p: p.rank or 0,
-        )
+        total = await self.participant_repo.count_ranked()
+        participants = await self.participant_repo.get_ranked(page=page, page_size=page_size)
 
         ranked_response = []
-        for p in ranked:
+        for p in participants:
             lane_caps = {}
             if p.lane_capabilities:
                 try:
@@ -417,13 +414,17 @@ class RankingService:
 
         return {
             "rankings": ranked_response,
-            "total": len(ranked_response),
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": (total + page_size - 1) // page_size,
             "qualified_count": active_ranking.qualified_count,
             "eliminated_count": active_ranking.eliminated_count,
             "generated_at": active_ranking.generated_at.isoformat(),
             "score_components": score_components,
             "status": active_ranking.status,
         }
+
 
     async def get_ranking_versions(self) -> List[Dict[str, Any]]:
         versions = await self.ranking_repo.get_all()

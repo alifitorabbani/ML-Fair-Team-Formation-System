@@ -1,6 +1,6 @@
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, func
 from app.models.models import Payment
 from app.schemas.schemas import PaymentStatus
 from datetime import datetime
@@ -15,6 +15,12 @@ class PaymentRepository:
             select(Payment).where(Payment.player_id == player_id).order_by(desc(Payment.created_at))
         )
         return result.scalar_one_or_none()
+
+    async def count_by_status(self, status: str) -> int:
+        result = await self.db.execute(
+            select(func.count()).select_from(Payment).where(Payment.status == status)
+        )
+        return result.scalar_one() or 0
 
     async def get_all(self) -> List[Payment]:
         result = await self.db.execute(select(Payment).order_by(desc(Payment.created_at)))

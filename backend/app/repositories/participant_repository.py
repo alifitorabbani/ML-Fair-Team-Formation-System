@@ -13,6 +13,23 @@ class ParticipantRepository:
         result = await self.db.execute(select(ParticipantDB).order_by(ParticipantDB.id))
         return list(result.scalars().all())
 
+    async def get_ranked(self, page: int = 1, page_size: int = 20) -> List[ParticipantDB]:
+        offset = (page - 1) * page_size
+        result = await self.db.execute(
+            select(ParticipantDB)
+            .where(ParticipantDB.rank.is_not(None))
+            .order_by(ParticipantDB.rank.asc())
+            .limit(page_size)
+            .offset(offset)
+        )
+        return list(result.scalars().all())
+
+    async def count_ranked(self) -> int:
+        result = await self.db.execute(
+            select(func.count()).select_from(ParticipantDB).where(ParticipantDB.rank.is_not(None))
+        )
+        return result.scalar_one() or 0
+
     async def get_by_id(self, player_id: str) -> Optional[ParticipantDB]:
         result = await self.db.execute(select(ParticipantDB).where(ParticipantDB.id == player_id))
         return result.scalar_one_or_none()
@@ -23,6 +40,18 @@ class ParticipantRepository:
 
     async def count(self) -> int:
         result = await self.db.execute(select(func.count()).select_from(ParticipantDB))
+        return result.scalar_one() or 0
+
+    async def count_by_status(self, status: str) -> int:
+        result = await self.db.execute(
+            select(func.count()).select_from(ParticipantDB).where(ParticipantDB.status == status)
+        )
+        return result.scalar_one() or 0
+
+    async def count_processed(self) -> int:
+        result = await self.db.execute(
+            select(func.count()).select_from(ParticipantDB).where(ParticipantDB.skill_score.is_not(None))
+        )
         return result.scalar_one() or 0
 
     async def upsert_many(self, participants: List[dict]) -> int:
