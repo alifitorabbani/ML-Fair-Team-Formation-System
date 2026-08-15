@@ -82,11 +82,9 @@ def _build_skill_breakdown(skill_score: float, current_rank_score: Optional[floa
     }
 
 
-def _build_role_breakdown(primary_lane_comfort: Optional[int], secondary_lane_comfort: Optional[int]) -> Optional[Dict[str, Any]]:
+def _build_role_breakdown(primary_lane_comfort: Optional[int], secondary_lane_comfort: Optional[int]) -> Dict[str, Any]:
     primary = primary_lane_comfort or 0
     secondary = secondary_lane_comfort or 0
-    if primary == 0 and secondary == 0:
-        return None
 
     normalized_primary = (primary / 5.0) * 100
     normalized_secondary = (secondary / 5.0) * 100 if secondary is not None else 0.0
