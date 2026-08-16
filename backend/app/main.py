@@ -1437,15 +1437,6 @@ async def admin_sync_participants(x_user_token: Optional[str] = Header(None), db
                 p.secondary_lane = secondary_lane
                 p.secondary_lane_comfort = secondary_lane_comfort
                 p.status = "QUALIFIED"
-                if p.id != expected_id:
-                    conflicting_p = next((ep for ep in existing if ep.id == expected_id and ep.email and ep.email.lower() != email), None)
-                    if conflicting_p:
-                        await db.execute(text("DELETE FROM payments WHERE player_id = :pid"), {"pid": conflicting_p.id})
-                        await db.execute(text("DELETE FROM team_members WHERE player_id = :pid"), {"pid": conflicting_p.id})
-                        await db.execute(text("DELETE FROM participants WHERE id = :pid"), {"pid": conflicting_p.id})
-                        existing = [ep for ep in existing if ep.id != conflicting_p.id]
-                        existing_map = {e.lower(): ep for e, ep in [(ep.email, ep) for ep in existing if ep.email]}
-                    p.id = expected_id
                 updated += 1
             else:
                 new_p = ParticipantDB(
