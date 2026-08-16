@@ -1437,7 +1437,7 @@ async def admin_sync_participants(x_user_token: Optional[str] = Header(None), db
             else:
                 from sqlalchemy import select, func, cast, Integer
                 max_result = await db.execute(
-                    select(func.max(cast(func.substr(ParticipantDB.id, 2), Integer)))
+                    select(func.max(cast(func.substring(ParticipantDB.id, 2), Integer)))
                     .where(ParticipantDB.id.like("P%"))
                 )
                 max_num = max_result.scalar_one() or 0
