@@ -4,7 +4,7 @@ from fastapi import Header
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import text
+from sqlalchemy import text, select, func
 import asyncio
 import pandas as pd
 import json
