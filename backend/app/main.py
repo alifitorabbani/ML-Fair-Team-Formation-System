@@ -1345,119 +1345,134 @@ async def admin_sync_participants(x_user_token: Optional[str] = Header(None), db
 
     import csv
     import os
+    import traceback
     from app.repositories.participant_repository import ParticipantRepository
     from app.repositories.payment_repository import PaymentRepository
     from app.repositories.team_repository import TeamRepository
     from app.repositories.audit_repository import AuditRepository
     from app.models.models import Payment, TeamMember, ParticipantDB
 
-    participant_repo = ParticipantRepository(db)
-    payment_repo = PaymentRepository(db)
-    team_repo = TeamRepository(db)
-    audit_repo = AuditRepository(db)
+    try:
+        participant_repo = ParticipantRepository(db)
+        payment_repo = PaymentRepository(db)
+        team_repo = TeamRepository(db)
+        audit_repo = AuditRepository(db)
 
-    csv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "Final-Database-WMPL-S3.csv")
-    if not os.path.exists(csv_path):
-        raise HTTPException(status_code=404, detail="CSV file not found")
+        csv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "Final-Database-WMPL-S3.csv")
+        if not os.path.exists(csv_path):
+            cwd = os.getcwd()
+            alt_path = os.path.join(cwd, "backend", "data", "Final-Database-WMPL-S3.csv")
+            print(f"CSV not found at {csv_path}, trying {alt_path}, cwd={cwd}")
+            if os.path.exists(alt_path):
+                csv_path = alt_path
+            else:
+                raise HTTPException(status_code=404, detail=f"CSV file not found at {csv_path} or {alt_path}")
 
-    with open(csv_path, 'r', encoding='utf-8') as f:
-        reader = csv.DictReader(f)
-        csv_rows = list(reader)
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            csv_rows = list(reader)
 
-    csv_emails = {row['Email Address'].strip().lower() for row in csv_rows if row['Email Address'].strip()}
+        csv_emails = {row['Email Address'].strip().lower() for row in csv_rows if row['Email Address'].strip()}
+        print(f"CSV loaded: {len(csv_rows)} rows, {len(csv_emails)} emails")
 
-    current_participants = await participant_repo.get_by_status("QUALIFIED")
-    to_delete = [p for p in current_participants if p.email and p.email.lower() not in csv_emails]
-    delete_ids = [p.id for p in to_delete]
+        current_participants = await participant_repo.get_by_status("QUALIFIED")
+        to_delete = [p for p in current_participants if p.email and p.email.lower() not in csv_emails]
+        delete_ids = [p.id for p in to_delete]
+        print(f"Participants to delete: {len(delete_ids)}")
 
-    if delete_ids:
-        for pid in delete_ids:
-            await db.execute(text("DELETE FROM payments WHERE player_id = :pid"), {"pid": pid})
-            await db.execute(text("DELETE FROM team_members WHERE player_id = :pid"), {"pid": pid})
-        placeholders = ",".join([f":pid{i}" for i in range(len(delete_ids))])
-        params = {f"pid{i}": pid for i, pid in enumerate(delete_ids)}
-        await db.execute(
-            text(f"DELETE FROM participants WHERE id IN ({placeholders})"),
-            params,
-        )
-        await audit_repo.create(
-            action="PARTICIPANTS_DELETED",
-            actor="admin",
-            metadata={"deleted_count": len(delete_ids)},
-        )
-
-    existing = await participant_repo.get_all()
-    existing_map = {p.email.lower(): p for p in existing if p.email}
-
-    inserted = 0
-    updated = 0
-    for row in csv_rows:
-        email = row['Email Address'].strip().lower()
-        name = row['Nama Lengkap'].strip()
-        username = row['Username Mobile Legends'].strip()
-        current_rank = row['Rank Saat Ini '].strip()
-        current_stars = int(row['Perolehan Bintang pada Rank Saat Ini']) if row['Perolehan Bintang pada Rank Saat Ini'].strip() else 0
-        highest_rank = row['Rank Tertinggi '].strip()
-        highest_stars = int(row['Perolehan Bintang pada Rank Tertinggi']) if row['Perolehan Bintang pada Rank Tertinggi'].strip() else 0
-        primary_lane = row['Lane #1 Terbaik'].strip()
-        primary_lane_comfort = int(row['Seberapa nyaman menggunakan Lane #1']) if row['Seberapa nyaman menggunakan Lane #1'].strip() else 0
-        secondary_lane = row['Lane #2 Terbaik'].strip() if row['Lane #2 Terbaik'].strip() else None
-        secondary_lane_comfort = int(row['Seberapa nyaman menggunakan Lane #2']) if row['Seberapa nyaman menggunakan Lane #2'].strip() else None
-
-        if not email:
-            continue
-
-        if email in existing_map:
-            p = existing_map[email]
-            p.name = name
-            p.username = username
-            p.current_rank = current_rank
-            p.current_stars = current_stars
-            p.highest_rank = highest_rank
-            p.highest_stars = highest_stars
-            p.primary_lane = primary_lane
-            p.primary_lane_comfort = primary_lane_comfort
-            p.secondary_lane = secondary_lane
-            p.secondary_lane_comfort = secondary_lane_comfort
-            p.status = "QUALIFIED"
-            updated += 1
-        else:
-            max_result = await db.execute(text("SELECT MAX(CAST(SUBSTR(id, 2) AS INTEGER)) FROM participants WHERE id LIKE 'P%'"))
-            max_num = max_result.scalar_one() or 0
-            participant_id = f"P{max_num + 1:03d}"
-            new_p = ParticipantDB(
-                id=participant_id,
-                name=name,
-                email=email,
-                username=username,
-                current_rank=current_rank,
-                current_stars=current_stars,
-                highest_rank=highest_rank,
-                highest_stars=highest_stars,
-                primary_lane=primary_lane,
-                primary_lane_comfort=primary_lane_comfort,
-                secondary_lane=secondary_lane,
-                secondary_lane_comfort=secondary_lane_comfort,
-                status="QUALIFIED",
+        if delete_ids:
+            for pid in delete_ids:
+                await db.execute(text("DELETE FROM payments WHERE player_id = :pid"), {"pid": pid})
+                await db.execute(text("DELETE FROM team_members WHERE player_id = :pid"), {"pid": pid})
+            placeholders = ",".join([f":pid{i}" for i in range(len(delete_ids))])
+            params = {f"pid{i}": pid for i, pid in enumerate(delete_ids)}
+            await db.execute(
+                text(f"DELETE FROM participants WHERE id IN ({placeholders})"),
+                params,
             )
-            db.add(new_p)
-            inserted += 1
+            await audit_repo.create(
+                action="PARTICIPANTS_DELETED",
+                actor="admin",
+                metadata={"deleted_count": len(delete_ids)},
+            )
 
-    await db.flush()
+        existing = await participant_repo.get_all()
+        existing_map = {p.email.lower(): p for p in existing if p.email}
 
-    cache.invalidate("admin_dashboard")
-    cache.invalidate("admin_rankings")
-    cache.invalidate("rankings_public")
-    cache.invalidate("admin_ranking_versions")
-    cache.invalidate("admin_team_versions")
-    cache.invalidate("system_state")
+        inserted = 0
+        updated = 0
+        for row in csv_rows:
+            email = row['Email Address'].strip().lower()
+            name = row['Nama Lengkap'].strip()
+            username = row['Username Mobile Legends'].strip()
+            current_rank = row['Rank Saat Ini '].strip()
+            current_stars = int(row['Perolehan Bintang pada Rank Saat Ini']) if row['Perolehan Bintang pada Rank Saat Ini'].strip() else 0
+            highest_rank = row['Rank Tertinggi '].strip()
+            highest_stars = int(row['Perolehan Bintang pada Rank Tertinggi']) if row['Perolehan Bintang pada Rank Tertinggi'].strip() else 0
+            primary_lane = row['Lane #1 Terbaik'].strip()
+            primary_lane_comfort = int(row['Seberapa nyaman menggunakan Lane #1']) if row['Seberapa nyaman menggunakan Lane #1'].strip() else 0
+            secondary_lane = row['Lane #2 Terbaik'].strip() if row['Lane #2 Terbaik'].strip() else None
+            secondary_lane_comfort = int(row['Seberapa nyaman menggunakan Lane #2']) if row['Seberapa nyaman menggunakan Lane #2'].strip() else None
 
-    return {
-        "deleted_count": len(delete_ids),
-        "inserted_count": inserted,
-        "updated_count": updated,
-        "total_participants": len(csv_emails),
-    }
+            if not email:
+                continue
+
+            if email in existing_map:
+                p = existing_map[email]
+                p.name = name
+                p.username = username
+                p.current_rank = current_rank
+                p.current_stars = current_stars
+                p.highest_rank = highest_rank
+                p.highest_stars = highest_stars
+                p.primary_lane = primary_lane
+                p.primary_lane_comfort = primary_lane_comfort
+                p.secondary_lane = secondary_lane
+                p.secondary_lane_comfort = secondary_lane_comfort
+                p.status = "QUALIFIED"
+                updated += 1
+            else:
+                max_result = await db.execute(text("SELECT MAX(CAST(SUBSTR(id, 2) AS INTEGER)) FROM participants WHERE id LIKE 'P%'"))
+                max_num = max_result.scalar_one() or 0
+                participant_id = f"P{max_num + 1:03d}"
+                new_p = ParticipantDB(
+                    id=participant_id,
+                    name=name,
+                    email=email,
+                    username=username,
+                    current_rank=current_rank,
+                    current_stars=current_stars,
+                    highest_rank=highest_rank,
+                    highest_stars=highest_stars,
+                    primary_lane=primary_lane,
+                    primary_lane_comfort=primary_lane_comfort,
+                    secondary_lane=secondary_lane,
+                    secondary_lane_comfort=secondary_lane_comfort,
+                    status="QUALIFIED",
+                )
+                db.add(new_p)
+                inserted += 1
+
+        await db.flush()
+
+        cache.invalidate("admin_dashboard")
+        cache.invalidate("admin_rankings")
+        cache.invalidate("rankings_public")
+        cache.invalidate("admin_ranking_versions")
+        cache.invalidate("admin_team_versions")
+        cache.invalidate("system_state")
+
+        return {
+            "deleted_count": len(delete_ids),
+            "inserted_count": inserted,
+            "updated_count": updated,
+            "total_participants": len(csv_emails),
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}")
 
 
 @app.post("/api/admin/seed-payments")
