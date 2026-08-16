@@ -354,6 +354,10 @@ async def admin_process_participants(x_user_token: Optional[str] = Header(None),
                 "status": "REGISTERED",
             })
         repo = ParticipantRepository(db)
+        await repo.clear_all()
+        await db.execute(text("DELETE FROM payments"))
+        await db.execute(text("DELETE FROM team_members"))
+        await db.flush()
         await repo.upsert_many(participant_dicts)
         await db.commit()
         count = len(await repo.get_all())
@@ -1381,7 +1385,7 @@ async def admin_sync_participants(x_user_token: Optional[str] = Header(None), db
         csv_emails = {row['Email Address'].strip().lower() for row in csv_rows if row['Email Address'].strip()}
         print(f"CSV loaded: {len(csv_rows)} rows, {len(csv_emails)} emails")
 
-        current_participants = await participant_repo.get_by_status("QUALIFIED")
+        current_participants = await participant_repo.get_all()
         to_delete = [p for p in current_participants if p.email and p.email.lower() not in csv_emails]
         delete_ids = [p.id for p in to_delete]
         print(f"Participants to delete: {len(delete_ids)}")
