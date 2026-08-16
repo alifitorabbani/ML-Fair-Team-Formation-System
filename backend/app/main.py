@@ -1350,13 +1350,16 @@ async def admin_sync_participants(x_user_token: Optional[str] = Header(None), db
     from app.repositories.participant_repository import ParticipantRepository
     from app.repositories.payment_repository import PaymentRepository
     from app.repositories.team_repository import TeamRepository
+    from app.repositories.system_state_repository import SystemStateRepository
     from app.repositories.audit_repository import AuditRepository
-    from app.models.models import Payment, TeamMember, ParticipantDB
+    from app.models.models import Payment, TeamMember, ParticipantDB, TeamVersion
+    from app.schemas.schemas import SystemState as SystemStateEnum, ParticipantFeatures
 
     try:
         participant_repo = ParticipantRepository(db)
         payment_repo = PaymentRepository(db)
         team_repo = TeamRepository(db)
+        system_state_repo = SystemStateRepository(db)
         audit_repo = AuditRepository(db)
 
         csv_path = settings.master_csv_path
@@ -1469,12 +1472,153 @@ async def admin_sync_participants(x_user_token: Optional[str] = Header(None), db
         cache.invalidate("admin_team_versions")
         cache.invalidate("system_state")
 
-        return {
+        # Auto-regenerate teams if all qualified participants have PAID payments
+        qualified_after = await participant_repo.get_by_status("QUALIFIED")
+        qualified_ids_after = [p.id for p in qualified_after]
+        payments_after = await payment_repo.get_by_player_ids(qualified_ids_after)
+        paid_ids_after = {p.player_id for p in payments_after if p.status == "PAID"}
+        all_paid = len(qualified_ids_after) > 0 and all(pid in paid_ids_after for pid in qualified_ids_after)
+
+        team_regenerated = False
+        if all_paid:
+            active_ranking = await ranking_repo.get_active()
+            if active_ranking:
+                participant_features = []
+                for p in qualified_after:
+                    lane_caps = {}
+                    if p.lane_capabilities:
+                        try:
+                            lane_caps = ast.literal_eval(p.lane_capabilities)
+                        except Exception:
+                            lane_caps = {}
+                    participant_features.append(ParticipantFeatures(
+                        player_id=p.id,
+                        name=p.name,
+                        full_name=p.name,
+                        email=p.email,
+                        username=p.username,
+                        current_rank=p.current_rank,
+                        current_stars=p.current_stars,
+                        highest_rank=p.highest_rank,
+                        highest_stars=p.highest_stars,
+                        current_rank_score=p.current_rank_score or 0.0,
+                        current_star_score=p.current_star_score or 0.0,
+                        highest_rank_score=p.highest_rank_score or 0.0,
+                        highest_star_score=p.highest_star_score or 0.0,
+                        primary_lane=p.primary_lane,
+                        secondary_lane=p.secondary_lane,
+                        primary_lane_comfort=p.primary_lane_comfort,
+                        secondary_lane_comfort=p.secondary_lane_comfort,
+                        skill_score=p.skill_score or 0.0,
+                        role_flexibility_score=p.role_flexibility_score or 0.0,
+                        jungle_comfort=p.jungle_comfort or 0.0,
+                        exp_comfort=p.exp_comfort or 0.0,
+                        mid_comfort=p.mid_comfort or 0.0,
+                        gold_comfort=p.gold_comfort or 0.0,
+                        roam_comfort=p.roam_comfort or 0.0,
+                        lane_capabilities=lane_caps,
+                        rank=p.rank,
+                        status=p.status,
+                    ))
+
+                seed = 42
+                num_teams = len(qualified_after) // 5
+
+                from app.optimization.team_optimizer import TeamOptimizer
+                from app.optimization.config.role_config import OptimizationConfig
+                from app.optimization.history.history_manager import HistoryManager
+
+                config = OptimizationConfig.get_default()
+                history = HistoryManager(enable=config.enable_history)
+                optimizer = TeamOptimizer(
+                    participants=participant_features,
+                    num_teams=num_teams,
+                    seed=seed,
+                    config=config,
+                    history=history,
+                )
+
+                try:
+                    teams, iterations, fairness = await asyncio.to_thread(optimizer.optimize)
+                    
+                    # Deactivate old team versions
+                    old_versions = await team_repo.get_all()
+                    for v in old_versions:
+                        v.is_active = False
+                    
+                    # Create new team version
+                    version_id = str(uuid4())
+                    version = TeamVersion(
+                        id=version_id,
+                        ranking_version_id=active_ranking.id,
+                        total_teams=len(teams),
+                        total_participants=len(qualified_after),
+                        selected_count=len(qualified_after),
+                        not_selected_count=0,
+                        overall_fairness=round(fairness, 2),
+                        random_seed=seed,
+                        optimization_iterations=iterations,
+                        processing_time_ms=0.0,
+                        generated_by="admin",
+                        is_active=True,
+                        status="CONFIRMED",
+                    )
+                    db.add(version)
+                    await db.flush()
+
+                    # Save team members
+                    for team_idx, team in enumerate(teams):
+                        team_id = f"T{team_idx + 1:02d}"
+                        for player in team:
+                            member = TeamMember(
+                                id=str(uuid4()),
+                                team_version_id=version_id,
+                                team_id=team_id,
+                                player_id=player.player_id,
+                                assigned_lane=player.primary_lane,
+                                comfort_in_assigned_lane=player.primary_lane_comfort,
+                                role_compatibility_score=0.0,
+                                assignment_reason="Auto-assigned after CSV sync",
+                                average_skill_score=0.0,
+                                role_balance_score=0.0,
+                                overall_fairness=0.0,
+                                fairness_breakdown=None,
+                            )
+                            db.add(member)
+
+                    await db.flush()
+
+                    # Update system state
+                    await system_state_repo.update_state(
+                        SystemStateEnum.team_generated.value,
+                        team_version_id=version_id,
+                    )
+
+                    await audit_repo.create(
+                        action="TEAM_GENERATED",
+                        actor="admin",
+                        metadata={
+                            "team_version_id": version_id,
+                            "total_teams": len(teams),
+                            "total_participants": len(qualified_after),
+                            "overall_fairness": round(fairness, 2),
+                            "auto_generated": True,
+                        },
+                    )
+
+                    team_regenerated = True
+                except Exception as e:
+                    print(f"Auto team regeneration failed: {e}")
+
+        result = {
             "deleted_count": len(delete_ids),
             "inserted_count": inserted,
             "updated_count": updated,
             "total_participants": len(csv_emails),
+            "team_regenerated": team_regenerated,
+            "message": "Tim berhasil dibuat ulang secara otomatis." if team_regenerated else "Sinkronisasi peserta selesai. Tim akan dibuat ulang setelah semua peserta melakukan pembayaran.",
         }
+        return result
     except HTTPException:
         raise
     except Exception as e:
