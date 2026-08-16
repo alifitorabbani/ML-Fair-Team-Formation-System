@@ -1435,7 +1435,7 @@ async def admin_sync_participants(x_user_token: Optional[str] = Header(None), db
                 p.status = "QUALIFIED"
                 updated += 1
             else:
-                from sqlalchemy import func, cast, Integer
+                from sqlalchemy import select, func, cast, Integer
                 max_result = await db.execute(
                     select(func.max(cast(func.substr(ParticipantDB.id, 2), Integer)))
                     .where(ParticipantDB.id.like("P%"))
