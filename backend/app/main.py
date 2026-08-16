@@ -1352,8 +1352,8 @@ async def admin_sync_participants(x_user_token: Optional[str] = Header(None), db
     from app.repositories.team_repository import TeamRepository
     from app.repositories.system_state_repository import SystemStateRepository
     from app.repositories.audit_repository import AuditRepository
-    from app.models.models import Payment, TeamMember, ParticipantDB, TeamVersion
-    from app.schemas.schemas import SystemState as SystemStateEnum, ParticipantFeatures
+    from app.models.models import Payment, TeamMember, ParticipantDB
+    from app.schemas.schemas import SystemState as SystemStateEnum
 
     try:
         participant_repo = ParticipantRepository(db)
@@ -1407,7 +1407,7 @@ async def admin_sync_participants(x_user_token: Optional[str] = Header(None), db
 
         inserted = 0
         updated = 0
-        for row in csv_rows:
+        for idx, row in enumerate(csv_rows):
             email = row['Email Address'].strip().lower()
             name = row['Nama Lengkap'].strip()
             username = row['Username Mobile Legends'].strip()
@@ -1423,6 +1423,7 @@ async def admin_sync_participants(x_user_token: Optional[str] = Header(None), db
             if not email:
                 continue
 
+            expected_id = f"P{idx + 1:03d}"
             if email in existing_map:
                 p = existing_map[email]
                 p.name = name
@@ -1436,17 +1437,12 @@ async def admin_sync_participants(x_user_token: Optional[str] = Header(None), db
                 p.secondary_lane = secondary_lane
                 p.secondary_lane_comfort = secondary_lane_comfort
                 p.status = "QUALIFIED"
+                if p.id != expected_id:
+                    p.id = expected_id
                 updated += 1
             else:
-                from sqlalchemy import select, func, cast, Integer
-                max_result = await db.execute(
-                    select(func.max(cast(func.substring(ParticipantDB.id, 2), Integer)))
-                    .where(ParticipantDB.id.like("P%"))
-                )
-                max_num = max_result.scalar_one() or 0
-                participant_id = f"P{max_num + 1:03d}"
                 new_p = ParticipantDB(
-                    id=participant_id,
+                    id=expected_id,
                     name=name,
                     email=email,
                     username=username,

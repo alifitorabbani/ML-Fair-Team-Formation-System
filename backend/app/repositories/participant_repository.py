@@ -116,9 +116,14 @@ class ParticipantRepository:
 
     async def bulk_update_status_and_rank(self, status_map: Dict[str, str], rank_map: Dict[str, int]) -> None:
         participants = await self.get_all()
+        email_to_participant = {p.email.lower(): p for p in participants if p.email}
         for p in participants:
             if p.id in status_map:
                 p.status = status_map[p.id]
+            elif p.email and p.email.lower() in status_map:
+                p.status = status_map[p.email.lower()]
             if p.id in rank_map:
                 p.rank = rank_map[p.id]
+            elif p.email and p.email.lower() in rank_map:
+                p.rank = rank_map[p.email.lower()]
         await self.db.flush()

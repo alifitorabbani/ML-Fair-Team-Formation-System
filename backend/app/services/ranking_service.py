@@ -212,8 +212,8 @@ class RankingService:
                 },
             }
 
-        status_map = {p.player_id: p.status for p in ranked}
-        rank_map = {p.player_id: p.rank for p in ranked}
+        status_map = {p.email: p.status for p in ranked if p.email}
+        rank_map = {p.email: p.rank for p in ranked if p.email}
         await self.participant_repo.bulk_update_status_and_rank(status_map, rank_map)
 
         active_ranking = await self.ranking_repo.get_active()
