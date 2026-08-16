@@ -224,6 +224,22 @@ export async function adminSeedPayments(token: string): Promise<{ inserted_count
   return response.json()
 }
 
+export async function adminSyncParticipants(token: string): Promise<{ deleted_count: number; inserted_count: number; updated_count: number; total_participants: number }> {
+  const response = await fetch(`${API_BASE}/api/admin/sync-participants`, {
+    method: 'POST',
+    headers: {
+      'X-User-Token': token,
+    },
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to sync participants')
+  }
+
+  return response.json()
+}
+
 export async function adminVerifyPayment(token: string, playerId: string, status: string, transactionId?: string, notes?: string): Promise<any> {
   const response = await fetch(`${API_BASE}/api/admin/verify-payment`, {
     method: 'POST',

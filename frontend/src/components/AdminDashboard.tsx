@@ -15,6 +15,7 @@ import {
   adminGetRankingVersions,
   adminGetTeamVersions,
   adminSeedPayments,
+  adminSyncParticipants,
 } from '@/lib/api'
 import { AdminDashboardStats, PaymentResponse, AuditLogResponse, RankingVersionResponse, TeamVersionResponse } from '@/types'
 import { Trophy, Users, Mail, DollarSign, Shield, Activity, RefreshCw, CheckCircle, XCircle, Clock, AlertTriangle } from 'lucide-react'
@@ -47,6 +48,7 @@ export default function AdminDashboard({
   const [generatingRanking, setGeneratingRanking] = useState(false)
   const [generatingTeam, setGeneratingTeam] = useState(false)
   const [seedingPayments, setSeedingPayments] = useState(false)
+  const [syncingParticipants, setSyncingParticipants] = useState(false)
   const [rankingPreview, setRankingPreview] = useState<any>(null)
   const [payments, setPayments] = useState<PaymentResponse[]>([])
   const [auditLogs, setAuditLogs] = useState<AuditLogResponse[]>([])
@@ -216,6 +218,23 @@ export default function AdminDashboard({
     }
   }
 
+  const handleSyncParticipants = async () => {
+    setSyncingParticipants(true)
+    setVerifyError(null)
+    setVerifySuccess(null)
+    try {
+      const result = await adminSyncParticipants(token || '')
+      alert(`Sinkronisasi peserta selesai.\n\nDihapus: ${result.deleted_count}\nDitambahkan: ${result.inserted_count}\nDiperbarui: ${result.updated_count}\nTotal peserta: ${result.total_participants}`)
+      loadDashboard()
+    } catch (err) {
+      if (!handleAdminError(err)) {
+        alert(err instanceof Error ? err.message : 'Gagal sinkronisasi peserta')
+      }
+    } finally {
+      setSyncingParticipants(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -314,6 +333,13 @@ export default function AdminDashboard({
               onClick={handleSeedPayments}
               loading={seedingPayments}
               icon={<DollarSign className="h-5 w-5" />}
+            />
+            <ActionCard
+              title="Sinkronisasi Peserta dari CSV"
+              description="Hapus peserta yang tidak ada di CSV baru dan update data peserta sesuai CSV. Data pembayaran yang ada tidak akan dihapus."
+              onClick={handleSyncParticipants}
+              loading={syncingParticipants}
+              icon={<Users className="h-5 w-5" />}
             />
           </div>
 
