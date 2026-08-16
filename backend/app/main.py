@@ -1372,10 +1372,13 @@ async def admin_sync_participants(x_user_token: Optional[str] = Header(None), db
 
     if delete_ids:
         for pid in delete_ids:
-            await db.execute(Payment.__table__.delete().where(Payment.player_id == pid))
-            await db.execute(TeamMember.__table__.delete().where(TeamMember.player_id == pid))
+            await db.execute(text("DELETE FROM payments WHERE player_id = :pid"), {"pid": pid})
+            await db.execute(text("DELETE FROM team_members WHERE player_id = :pid"), {"pid": pid})
+        placeholders = ",".join([f":pid{i}" for i in range(len(delete_ids))])
+        params = {f"pid{i}": pid for i, pid in enumerate(delete_ids)}
         await db.execute(
-            ParticipantDB.__table__.delete().where(ParticipantDB.id.in_(delete_ids))
+            text(f"DELETE FROM participants WHERE id IN ({placeholders})"),
+            params,
         )
         await audit_repo.create(
             action="PARTICIPANTS_DELETED",
