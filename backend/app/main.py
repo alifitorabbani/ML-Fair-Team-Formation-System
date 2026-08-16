@@ -1343,6 +1343,147 @@ async def admin_get_audit_log(x_user_token: Optional[str] = Header(None), db: As
     return JSONResponse(content=result, headers={"Cache-Control": "public, max-age=30"})
 
 
+async def _maybe_regenerate_teams(db: AsyncSession, ranking_repo: RankingRepository, team_repo: TeamRepository,
+                                 participant_repo: ParticipantRepository, payment_repo: PaymentRepository,
+                                 system_state_repo: SystemStateRepository, audit_repo: AuditRepository) -> bool:
+    qualified = await participant_repo.get_by_status("QUALIFIED")
+    qualified_ids = [p.id for p in qualified]
+    payments = await payment_repo.get_by_player_ids(qualified_ids)
+    paid_ids = {p.player_id for p in payments if p.status == "PAID"}
+    if not qualified_ids or not all(pid in paid_ids for pid in qualified_ids):
+        return False
+
+    active_ranking = await ranking_repo.get_active()
+    if not active_ranking:
+        return False
+
+    participant_features = []
+    for p in qualified:
+        lane_caps = {}
+        if p.lane_capabilities:
+            try:
+                lane_caps = ast.literal_eval(p.lane_capabilities)
+            except Exception:
+                lane_caps = {}
+        participant_features.append(ParticipantFeatures(
+            player_id=p.id,
+            name=p.name,
+            full_name=p.name,
+            email=p.email,
+            username=p.username,
+            current_rank=p.current_rank,
+            current_stars=p.current_stars,
+            highest_rank=p.highest_rank,
+            highest_stars=p.highest_stars,
+            current_rank_score=p.current_rank_score or 0.0,
+            current_star_score=p.current_star_score or 0.0,
+            highest_rank_score=p.highest_rank_score or 0.0,
+            highest_star_score=p.highest_star_score or 0.0,
+            primary_lane=p.primary_lane,
+            secondary_lane=p.secondary_lane,
+            primary_lane_comfort=p.primary_lane_comfort,
+            secondary_lane_comfort=p.secondary_lane_comfort,
+            skill_score=p.skill_score or 0.0,
+            role_flexibility_score=p.role_flexibility_score or 0.0,
+            jungle_comfort=p.jungle_comfort or 0.0,
+            exp_comfort=p.exp_comfort or 0.0,
+            mid_comfort=p.mid_comfort or 0.0,
+            gold_comfort=p.gold_comfort or 0.0,
+            roam_comfort=p.roam_comfort or 0.0,
+            lane_capabilities=lane_caps,
+            rank=p.rank,
+            status=p.status,
+        ))
+
+    seed = 42
+    num_teams = len(qualified) // 5
+
+    from app.optimization.team_optimizer import TeamOptimizer
+    from app.optimization.config.role_config import OptimizationConfig
+    from app.optimization.history.history_manager import HistoryManager
+
+    config = OptimizationConfig.get_default()
+    history = HistoryManager(enable=config.enable_history)
+    optimizer = TeamOptimizer(
+        participants=participant_features,
+        num_teams=num_teams,
+        seed=seed,
+        config=config,
+        history=history,
+    )
+
+    teams, iterations, fairness = await asyncio.to_thread(optimizer.optimize)
+
+    old_versions = await team_repo.get_all()
+    for v in old_versions:
+        v.is_active = False
+
+    version_id = str(uuid4())
+    version = TeamVersion(
+        id=version_id,
+        ranking_version_id=active_ranking.id,
+        total_teams=len(teams),
+        total_participants=len(qualified),
+        selected_count=len(qualified),
+        not_selected_count=0,
+        overall_fairness=round(fairness, 2),
+        random_seed=seed,
+        optimization_iterations=iterations,
+        processing_time_ms=0.0,
+        generated_by="system",
+        is_active=True,
+        status="CONFIRMED",
+    )
+    db.add(version)
+    await db.flush()
+
+    for team_idx, team in enumerate(teams):
+        team_id = f"T{team_idx + 1:02d}"
+        for player in team:
+            member = TeamMember(
+                id=str(uuid4()),
+                team_version_id=version_id,
+                team_id=team_id,
+                player_id=player.player_id,
+                assigned_lane=player.primary_lane,
+                comfort_in_assigned_lane=player.primary_lane_comfort,
+                role_compatibility_score=0.0,
+                assignment_reason="Auto-assigned after all payments completed",
+                average_skill_score=0.0,
+                role_balance_score=0.0,
+                overall_fairness=0.0,
+                fairness_breakdown=None,
+            )
+            db.add(member)
+
+    await db.flush()
+
+    await system_state_repo.update_state(
+        SystemStateEnum.team_generated.value,
+        team_version_id=version_id,
+    )
+
+    await audit_repo.create(
+        action="TEAM_GENERATED",
+        actor="system",
+        metadata={
+            "team_version_id": version_id,
+            "total_teams": len(teams),
+            "total_participants": len(qualified),
+            "overall_fairness": round(fairness, 2),
+            "auto_generated": True,
+        },
+    )
+
+    cache.invalidate("admin_dashboard")
+    cache.invalidate("admin_teams")
+    cache.invalidate("teams_public")
+    cache.invalidate("admin_team_versions")
+    cache.invalidate("system_state")
+
+    return True
+
+
 @app.post("/api/admin/sync-participants")
 async def admin_sync_participants(x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)):
     _require_admin(x_user_token)
@@ -1638,12 +1779,14 @@ async def admin_seed_payments(x_user_token: Optional[str] = Header(None), db: As
     audit_repo = AuditRepository(db)
 
     qualified = await participant_repo.get_by_status("QUALIFIED")
-    existing = await payment_repo.get_by_player_ids([p.id for p in qualified])
+    # Only auto-mark P001-P040 as PAID; P041-P045 must pay manually
+    initial_batch = [p for p in qualified if p.id <= "P040"]
+    existing = await payment_repo.get_by_player_ids([p.id for p in initial_batch])
     existing_ids = {p.player_id for p in existing}
 
     now = datetime.utcnow()
     inserted = 0
-    for idx, p in enumerate(qualified, 1):
+    for idx, p in enumerate(initial_batch, 1):
         if p.id in existing_ids:
             continue
         payment_id = f"PAY-{idx:03d}"
@@ -1651,13 +1794,13 @@ async def admin_seed_payments(x_user_token: Optional[str] = Header(None), db: As
         await payment_repo.create_or_update(
             player_id=p.id,
             status="PAID",
-            amount=50000.0,
-            method="Transfer Bank",
+            amount=20000.0,
+            method="E-Money Dana/Link",
             paid_at=now - timedelta(days=7),
             verified_by="admin",
             verified_at=now - timedelta(days=3),
             transaction_id=transaction_id,
-            notes="Pembayaran verifikasi admin",
+            notes="Auto-marked as PAID for initial batch",
         )
         inserted += 1
 
