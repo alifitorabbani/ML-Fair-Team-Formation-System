@@ -1346,6 +1346,7 @@ async def admin_sync_participants(x_user_token: Optional[str] = Header(None), db
     import csv
     import os
     import traceback
+    from app.config.settings import settings
     from app.repositories.participant_repository import ParticipantRepository
     from app.repositories.payment_repository import PaymentRepository
     from app.repositories.team_repository import TeamRepository
@@ -1358,10 +1359,12 @@ async def admin_sync_participants(x_user_token: Optional[str] = Header(None), db
         team_repo = TeamRepository(db)
         audit_repo = AuditRepository(db)
 
-        csv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "Final-Database-WMPL-S3.csv")
+        csv_path = settings.master_csv_path
+        if not os.path.isabs(csv_path):
+            csv_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), csv_path)
         if not os.path.exists(csv_path):
             cwd = os.getcwd()
-            alt_path = os.path.join(cwd, "backend", "data", "Final-Database-WMPL-S3.csv")
+            alt_path = os.path.join(cwd, "backend", settings.master_csv_path)
             print(f"CSV not found at {csv_path}, trying {alt_path}, cwd={cwd}")
             if os.path.exists(alt_path):
                 csv_path = alt_path

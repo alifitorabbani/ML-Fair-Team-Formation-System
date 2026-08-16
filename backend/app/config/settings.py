@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     payment_account_number: str = "082141233543"
     payment_account_name: str = "Muhammad Syofiudin"
     payment_amount: int = 20000
-    master_csv_path: str = "data/Database-Fix-WMPL-S3.csv"
+    master_csv_path: str = "data/Final-Database-WMPL-S3.csv"
     blob_read_write_token: str = ""
     admin_emails: str = "rebanialifito@gmail.com,rabbanialifito@gmail.com"
 
