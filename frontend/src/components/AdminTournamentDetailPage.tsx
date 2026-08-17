@@ -626,6 +626,8 @@ function GroupCard({ token, tournamentId, group, onUpdated }: { token: string | 
   const [availableTeams, setAvailableTeams] = useState<any[]>([])
   const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
+  const [standings, setStandings] = useState<any[]>([])
+  const [loadingStandings, setLoadingStandings] = useState(false)
 
   const loadAvailable = async () => {
     if (!token) return
@@ -637,11 +639,35 @@ function GroupCard({ token, tournamentId, group, onUpdated }: { token: string | 
     }
   }
 
+  const loadStandings = async () => {
+    if (!token) return
+    setLoadingStandings(true)
+    try {
+      const data = await adminGetStandings(token, tournamentId)
+      const groupStandings = data.find((g: any) => g.group_id === group.id)
+      setStandings(groupStandings?.standings || [])
+    } catch {
+      // ignore
+    } finally {
+      setLoadingStandings(false)
+    }
+  }
+
+  useEffect(() => {
+    loadStandings()
+  }, [token, tournamentId, group.id])
+
   useEffect(() => {
     if (editing) {
       loadAvailable()
     }
   }, [editing])
+
+  useEffect(() => {
+    if (group.members?.length > 0) {
+      loadStandings()
+    }
+  }, [group.members])
 
   const handleSave = async () => {
     if (!token) return
@@ -652,6 +678,7 @@ function GroupCard({ token, tournamentId, group, onUpdated }: { token: string | 
       await adminUpdateGroup(token, tournamentId, group.id, { team_ids: newIds })
       setEditing(false)
       onUpdated()
+      loadStandings()
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Gagal menyimpan group')
     } finally {
@@ -665,6 +692,7 @@ function GroupCard({ token, tournamentId, group, onUpdated }: { token: string | 
     try {
       await adminUpdateGroup(token, tournamentId, group.id, { team_ids: currentIds })
       onUpdated()
+      loadStandings()
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Gagal menghapus tim dari group')
     }
@@ -690,19 +718,61 @@ function GroupCard({ token, tournamentId, group, onUpdated }: { token: string | 
       </div>
 
       {!editing ? (
-        <div className="space-y-2">
+        <div className="space-y-3">
           {assignedCount === 0 ? (
             <p className="text-xs text-gray-500">Belum ada tim. Gunakan tombol Auto-Isi Group untuk mengisi group ini.</p>
           ) : (
-            group.members.map((m: any) => (
-              <div key={m.id} className="flex items-center justify-between rounded-xl border border-white/5 bg-surface-900/40 px-3 py-2">
-                <div>
-                  <div className="text-sm text-white">{m.team_name_snapshot || m.team_id}</div>
-                  <div className="text-xs text-gray-500">Seed: {m.seed || '-'}</div>
+            <div className="space-y-2">
+              {group.members.map((m: any) => (
+                <div key={m.id} className="flex items-center justify-between rounded-xl border border-white/5 bg-surface-900/40 px-3 py-2">
+                  <div>
+                    <div className="text-sm text-white">{m.team_name_snapshot || m.team_id}</div>
+                    <div className="text-xs text-gray-500">Seed: {m.seed || '-'}</div>
+                  </div>
                 </div>
-              </div>
-            ))
+              ))}
+            </div>
           )}
+          {standings.length > 0 && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-white/10 text-left text-xs text-gray-400">
+                    <th className="pb-1 pr-2">#</th>
+                    <th className="pb-1 pr-2">Tim</th>
+                    <th className="pb-1 pr-2">P</th>
+                    <th className="pb-1 pr-2">W</th>
+                    <th className="pb-1 pr-2">L</th>
+                    <th className="pb-1 pr-2">K</th>
+                    <th className="pb-1 pr-2">D</th>
+                    <th className="pb-1 pr-2">KD</th>
+                    <th className="pb-1 pr-2">WR</th>
+                    <th className="pb-1">Pts</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {standings.map((s: any) => {
+                    const winRate = s.played > 0 ? ((s.win / s.played) * 100).toFixed(1) : '0.0'
+                    return (
+                      <tr key={s.team_id} className="border-b border-white/5">
+                        <td className="py-1 pr-2 text-gray-300">{s.rank || '-'}</td>
+                        <td className="py-1 pr-2 text-white">{s.team_name || s.team_id}</td>
+                        <td className="py-1 pr-2 text-gray-300">{s.played}</td>
+                        <td className="py-1 pr-2 text-green-400">{s.win}</td>
+                        <td className="py-1 pr-2 text-red-400">{s.loss}</td>
+                        <td className="py-1 pr-2 text-gray-300">{s.kill}</td>
+                        <td className="py-1 pr-2 text-gray-300">{s.death}</td>
+                        <td className="py-1 pr-2 text-gray-300">{s.kill_difference > 0 ? '+' : ''}{s.kill_difference}</td>
+                        <td className="py-1 pr-2 text-gray-300">{winRate}%</td>
+                        <td className="py-1 font-semibold text-white">{s.points}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {loadingStandings && <p className="text-xs text-gray-500">Memuat klasemen...</p>}
         </div>
       ) : (
         <div className="space-y-3">

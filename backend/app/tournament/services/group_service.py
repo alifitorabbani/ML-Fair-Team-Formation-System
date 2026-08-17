@@ -118,6 +118,7 @@ class GroupService:
                     "death": standing.death if standing else 0,
                     "kill_difference": standing.kill_difference if standing else 0,
                     "points": standing.points if standing else 0,
+                    "win_rate": (standing.win / standing.played) * 100 if standing and standing.played > 0 else 0.0,
                     "is_manual_override": standing.is_manual_override if standing else False,
                 }
             )
