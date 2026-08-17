@@ -273,6 +273,7 @@ class TournamentService:
             raise ValueError("Tournament not found")
         await self.group_member_repo.delete_by_tournament(tournament_id)
         await self.group_repo.delete_by_tournament(tournament_id)
+        await self.db.flush()
         if tournament.status == TournamentStatus.GROUPS_CONFIGURED:
             tournament.status = TournamentStatus.TEAMS_LOCKED
             tournament.updated_at = datetime.utcnow()
