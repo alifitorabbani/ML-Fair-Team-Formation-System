@@ -1,13 +1,14 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { adminGetTournament, adminUpdateTournament, adminGetTournamentTeams, adminGetAvailableTeams, adminCreateGroup, adminUpdateGroup, adminGetGroups, adminClearGroups, adminAutoAssignGroups, adminGenerateSchedule, adminGetSchedule, adminGetStandings, adminRecalculateStandings, adminOverrideStandings, adminCreateMatch, adminUpdateMatch, adminDeleteMatch, adminSubmitMatchResult, adminConfirmMatchResult, adminGenerateKnockout, adminGetKnockout, adminAdvanceKnockout, adminSetPlacement, adminFinalizeChampion } from '@/lib/tournamentApi'
+import { adminGetTournament, adminUpdateTournament, adminGetTournamentTeams, adminGetAvailableTeams, adminCreateGroup, adminUpdateGroup, adminGetGroups, adminClearGroups, adminAutoAssignGroups, adminGenerateSchedule, adminGetSchedule, adminGetStandings, adminRecalculateStandings, adminOverrideStandings, adminCreateMatch, adminUpdateMatch, adminDeleteMatch, adminSubmitMatchResult, adminConfirmMatchResult, adminGenerateKnockout, adminGetKnockout, adminAdvanceKnockout, adminSetPlacement, adminFinalizeChampion, adminSetBracketQualification, adminGetBracketQualifications, adminClearBracketQualifications } from '@/lib/tournamentApi'
 import { useAuthToken } from '@/lib/hooks/useAuth'
 import { TournamentResponse } from '@/types'
 import LoadingSpinner from '@/components/shared/LoadingSpinner'
 import ErrorMessage from '@/components/shared/ErrorMessage'
 import Card from '@/components/shared/Card'
 import { ArrowLeft, Save, Users, Calendar, ClipboardList, GitBranch, Trophy } from 'lucide-react'
+import AnimatedBracket from './AnimatedBracket'
 
 type Tab = 'config' | 'groups' | 'schedule' | 'matches' | 'standings' | 'knockout' | 'results'
 
@@ -23,26 +24,38 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
   const [standings, setStandings] = useState<any[]>([])
   const [knockout, setKnockout] = useState<any[]>([])
   const [matches, setMatches] = useState<any[]>([])
+  const [bracketQualifications, setBracketQualifications] = useState<any[]>([])
   const [showCreateGroup, setShowCreateGroup] = useState(false)
   const [newGroupName, setNewGroupName] = useState('')
   const [creatingGroup, setCreatingGroup] = useState(false)
   const [groupError, setGroupError] = useState<string | null>(null)
+  const [scheduleConfig, setScheduleConfig] = useState({
+    start_date: '',
+    end_date: '',
+    match_duration_minutes: 45,
+    bo_format: 'BO1',
+    min_rest_minutes: 60,
+    buffer_minutes: 0,
+  })
+  const [showScheduleConfig, setShowScheduleConfig] = useState(false)
 
   const load = async () => {
     if (!token) return
     try {
       const data = await adminGetTournament(token, tournamentId)
       setTournament(data)
-      const [g, s, st, k] = await Promise.all([
+      const [g, s, st, k, bq] = await Promise.all([
         adminGetGroups(token, tournamentId),
         adminGetSchedule(token, tournamentId),
         adminGetStandings(token, tournamentId),
         adminGetKnockout(token, tournamentId),
+        adminGetBracketQualifications(token, tournamentId),
       ])
       setGroups(g)
       setSchedule(s)
       setStandings(st)
       setKnockout(k)
+      setBracketQualifications(bq)
       const m = await adminGetSchedule(token, tournamentId)
       setMatches(m)
     } catch (err) {
@@ -75,7 +88,14 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
     setSaving(true)
     setError(null)
     try {
-      const result = await adminGenerateSchedule(token, tournamentId)
+      const result = await adminGenerateSchedule(token, tournamentId, {
+        start_date: scheduleConfig.start_date || undefined,
+        end_date: scheduleConfig.end_date || undefined,
+        match_duration_minutes: scheduleConfig.match_duration_minutes,
+        bo_format: scheduleConfig.bo_format,
+        min_rest_minutes: scheduleConfig.min_rest_minutes,
+        buffer_minutes: scheduleConfig.buffer_minutes,
+      })
       setMessage(`Jadwal dibuat: ${result.total_matches} match, fairness score: ${result.fairness_score}`)
       load()
     } catch (err) {
@@ -359,7 +379,7 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
 
       {activeTab === 'schedule' && (
         <div className="space-y-4">
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={handleGenerateSchedule}
               disabled={saving}
@@ -368,7 +388,82 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
               <Calendar className="h-4 w-4" />
               Generate Jadwal
             </button>
+            <button
+              onClick={() => setShowScheduleConfig(!showScheduleConfig)}
+              className="rounded-xl border border-white/10 px-4 py-2 text-sm font-medium text-gray-300 hover:text-white"
+            >
+              {showScheduleConfig ? 'Sembunyikan Konfigurasi' : 'Konfigurasi Jadwal'}
+            </button>
           </div>
+          {showScheduleConfig && (
+            <Card>
+              <div className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-300">Tanggal Mulai</label>
+                    <input
+                      type="date"
+                      value={scheduleConfig.start_date}
+                      onChange={(e) => setScheduleConfig((prev) => ({ ...prev, start_date: e.target.value }))}
+                      className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-4 py-2 text-sm text-white focus:border-brand-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-300">Tanggal Selesai</label>
+                    <input
+                      type="date"
+                      value={scheduleConfig.end_date}
+                      onChange={(e) => setScheduleConfig((prev) => ({ ...prev, end_date: e.target.value }))}
+                      className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-4 py-2 text-sm text-white focus:border-brand-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-300">Durasi Match (menit)</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={scheduleConfig.match_duration_minutes}
+                      onChange={(e) => setScheduleConfig((prev) => ({ ...prev, match_duration_minutes: parseInt(e.target.value || '45', 10) }))}
+                      className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-4 py-2 text-sm text-white focus:border-brand-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-300">Format BO</label>
+                    <select
+                      value={scheduleConfig.bo_format}
+                      onChange={(e) => setScheduleConfig((prev) => ({ ...prev, bo_format: e.target.value }))}
+                      className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-4 py-2 text-sm text-white focus:border-brand-500 focus:outline-none"
+                    >
+                      <option value="BO1">BO1</option>
+                      <option value="BO3">BO3</option>
+                      <option value="BO5">BO5</option>
+                      <option value="BO7">BO7</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-300">Min Rest (menit)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={scheduleConfig.min_rest_minutes}
+                      onChange={(e) => setScheduleConfig((prev) => ({ ...prev, min_rest_minutes: parseInt(e.target.value || '60', 10) }))}
+                      className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-4 py-2 text-sm text-white focus:border-brand-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-300">Buffer (menit)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={scheduleConfig.buffer_minutes}
+                      onChange={(e) => setScheduleConfig((prev) => ({ ...prev, buffer_minutes: parseInt(e.target.value || '0', 10) }))}
+                      className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-4 py-2 text-sm text-white focus:border-brand-500 focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+            </Card>
+          )}
           {matchError && <p className="text-xs text-red-400">{matchError}</p>}
           {schedule.length === 0 ? (
             <Card><p className="text-sm text-gray-400">Belum ada jadwal.</p></Card>
@@ -500,9 +595,27 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
 
       {activeTab === 'standings' && (
         <div className="space-y-4">
-          <button onClick={handleRecalculateStandings} className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500">
-            Hitung Ulang Klasemen
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={handleRecalculateStandings} className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500">
+              Hitung Ulang Klasemen
+            </button>
+            <button
+              onClick={async () => {
+                if (!token) return
+                if (!confirm('Hapus semua kualifikasi bracket?')) return
+                try {
+                  await adminClearBracketQualifications(token, tournamentId)
+                  setBracketQualifications([])
+                  setMessage('Kualifikasi bracket dihapus')
+                } catch (err) {
+                  alert(err instanceof Error ? err.message : 'Gagal menghapus kualifikasi bracket')
+                }
+              }}
+              className="rounded-xl border border-white/10 px-4 py-2 text-sm font-medium text-gray-300 hover:text-white"
+            >
+              Reset Kualifikasi Bracket
+            </button>
+          </div>
           {standings.map((group) => (
             <Card key={group.group_id}>
               <h3 className="mb-3 text-lg font-semibold text-white">{group.group_name}</h3>
@@ -519,16 +632,27 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
                       <th className="pb-2 pr-4">D</th>
                       <th className="pb-2 pr-4">KD</th>
                       <th className="pb-2 pr-4">WR</th>
+                      <th className="pb-2 pr-4">Bracket</th>
                       <th className="pb-2">Pts</th>
                     </tr>
                   </thead>
                   <tbody>
                     {group.standings.map((s: any) => {
                       const winRate = s.played > 0 ? ((s.win / s.played) * 100).toFixed(1) : '0.0'
+                      const qualification = bracketQualifications.find((q: any) => q.team_id === s.team_id)
+                      const isEliminated = !qualification || !qualification.bracket_type
+                      const bracketColors: Record<string, string> = {
+                        UPPER: 'bg-green-500/10 text-green-300',
+                        LOWER: 'bg-yellow-500/10 text-yellow-300',
+                      }
+                      const bracketLabels: Record<string, string> = {
+                        UPPER: 'Upper',
+                        LOWER: 'Lower',
+                      }
                       return (
-                        <tr key={s.team_id} className="border-b border-white/5">
+                        <tr key={s.team_id} className={`border-b ${isEliminated ? 'bg-red-500/5' : 'border-white/5'}`}>
                           <td className="py-2 pr-4 text-gray-300">{s.rank || '-'}</td>
-                          <td className="py-2 pr-4 text-white">{s.team_name || s.team_id}</td>
+                          <td className={`py-2 pr-4 ${isEliminated ? 'text-red-300' : 'text-white'}`}>{s.team_name || s.team_id}</td>
                           <td className="py-2 pr-4 text-gray-300">{s.played}</td>
                           <td className="py-2 pr-4 text-green-400">{s.win}</td>
                           <td className="py-2 pr-4 text-red-400">{s.loss}</td>
@@ -536,6 +660,33 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
                           <td className="py-2 pr-4 text-gray-300">{s.death}</td>
                           <td className="py-2 pr-4 text-gray-300">{s.kill_difference > 0 ? '+' : ''}{s.kill_difference}</td>
                           <td className="py-2 pr-4 text-gray-300">{winRate}%</td>
+                          <td className="py-2 pr-4">
+                            <select
+                              value={qualification?.bracket_type || ''}
+                              onChange={async (e) => {
+                                const bracketType = e.target.value
+                                if (!bracketType) return
+                                try {
+                                  await adminSetBracketQualification(token, tournamentId, {
+                                    team_id: s.team_id,
+                                    bracket_type: bracketType,
+                                    group_id: group.group_id,
+                                    rank: s.rank,
+                                  })
+                                  const updated = await adminGetBracketQualifications(token, tournamentId)
+                                  setBracketQualifications(updated)
+                                  setMessage('Kualifikasi bracket disimpan')
+                                } catch (err) {
+                                  alert(err instanceof Error ? err.message : 'Gagal menyimpan kualifikasi bracket')
+                                }
+                              }}
+                              className="rounded-xl border border-white/10 bg-surface-900/60 px-2 py-1 text-xs text-white focus:border-brand-500 focus:outline-none"
+                            >
+                              <option value="">-</option>
+                              <option value="UPPER">Upper</option>
+                              <option value="LOWER">Lower</option>
+                            </select>
+                          </td>
                           <td className="py-2 font-semibold text-white">{s.points}</td>
                         </tr>
                       )
@@ -550,46 +701,40 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
 
       {activeTab === 'knockout' && (
         <div className="space-y-6">
-          <button
-            onClick={async () => {
-              if (!token) return
-              const qualified = matches.filter(m => m.status === 'COMPLETED').map(m => m.winner_team_id).filter(Boolean) as string[]
-              if (qualified.length === 0) return
-              await adminGenerateKnockout(token, tournamentId, 'UPPER', qualified)
-              load()
-            }}
-            className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500"
-          >
-            Generate Bracket
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={async () => {
+                if (!token) return
+                const qualified = matches.filter(m => m.status === 'COMPLETED').map(m => m.winner_team_id).filter(Boolean) as string[]
+                if (qualified.length === 0) return
+                await adminGenerateKnockout(token, tournamentId, 'UPPER', qualified)
+                load()
+              }}
+              className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500"
+            >
+              Generate Bracket
+            </button>
+            <button
+              onClick={async () => {
+                if (!token) return
+                await adminClearBracketQualifications(token, tournamentId)
+                setBracketQualifications([])
+                setMessage('Kualifikasi bracket dihapus')
+                load()
+              }}
+              className="rounded-xl border border-white/10 px-4 py-2 text-sm font-medium text-gray-300 hover:text-white"
+            >
+              Reset Kualifikasi
+            </button>
+          </div>
           {knockout.length === 0 ? (
             <Card><p className="text-sm text-gray-400">Belum ada bracket.</p></Card>
           ) : (
-            knockout.map((bracket) => (
-              <Card key={bracket.id}>
-                <h3 className="mb-4 text-lg font-semibold text-white">{bracket.name}</h3>
-                <div className="space-y-4">
-                  {bracket.rounds?.map((round: any) => (
-                    <div key={round.id}>
-                      <div className="mb-2 text-sm font-medium text-gray-400">{round.round_name}</div>
-                      <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-4">
-                        {round.slots.map((slot: any) => (
-                          <div key={slot.id} className={`rounded-xl border p-3 ${slot.team_id ? 'border-white/10 bg-surface-900/60' : 'border-dashed border-white/5 bg-surface-900/20'}`}>
-                            <div className="text-xs text-gray-500">Slot {slot.slot_number}</div>
-                            <div className={`mt-1 text-sm ${slot.team_id ? 'text-white' : 'text-gray-600'}`}>
-                              {slot.team_id || 'TBD'}
-                            </div>
-                            <div className={`mt-1 text-xs ${slot.status === 'FILLED' ? 'text-green-400' : 'text-gray-500'}`}>
-                              {slot.status}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            ))
+            <AnimatedBracket
+              upperMatches={knockout.filter((b: any) => b.bracket_type === 'UPPER').flatMap((b: any) => b.rounds?.flatMap((r: any) => r.slots?.map((s: any) => ({ ...s, bracket_type: 'UPPER' })) || [])).filter((m: any) => m.team_id)}
+              lowerMatches={knockout.filter((b: any) => b.bracket_type === 'LOWER').flatMap((b: any) => b.rounds?.flatMap((r: any) => r.slots?.map((s: any) => ({ ...s, bracket_type: 'LOWER' })) || [])).filter((m: any) => m.team_id)}
+              grandFinal={null}
+            />
           )}
         </div>
       )}

@@ -37,6 +37,7 @@ class Tournament(Base):
     brackets = relationship("KnockoutBracket", back_populates="tournament", cascade="all, delete-orphan")
     schedule_versions = relationship("ScheduleVersion", back_populates="tournament", cascade="all, delete-orphan")
     placements = relationship("TournamentPlacement", back_populates="tournament", cascade="all, delete-orphan")
+    bracket_qualifications = relationship("BracketQualification", back_populates="tournament", cascade="all, delete-orphan")
 
     __table_args__ = (
         UniqueConstraint("name", name="uq_tournament_name"),
@@ -287,4 +288,56 @@ class TournamentPlacement(Base):
     __table_args__ = (
         UniqueConstraint("tournament_id", "team_id", name="uq_tournament_team_placement"),
         UniqueConstraint("tournament_id", "placement", name="uq_tournament_placement"),
+    )
+
+
+class BracketQualification(Base):
+    __tablename__ = "bracket_qualifications"
+
+    id = Column(String, primary_key=True, default=uuid_str, index=True)
+    tournament_id = Column(String, ForeignKey("tournaments.id", ondelete="CASCADE"), nullable=False, index=True)
+    group_id = Column(String, ForeignKey("tournament_groups.id", ondelete="CASCADE"), nullable=True, index=True)
+    team_id = Column(String, nullable=False, index=True)
+    bracket_type = Column(String, nullable=False, index=True)
+    rank = Column(Integer, nullable=True)
+
+    tournament = relationship("Tournament", back_populates="bracket_qualifications")
+    group = relationship("TournamentGroup")
+
+    __table_args__ = (
+        UniqueConstraint("tournament_id", "team_id", name="uq_bracket_team"),
+        Index("ix_bracket_qualifications_tournament_bracket", "tournament_id", "bracket_type"),
+    )
+
+
+class BracketMatch(Base):
+    __tablename__ = "bracket_matches"
+
+    id = Column(String, primary_key=True, default=uuid_str, index=True)
+    tournament_id = Column(String, ForeignKey("tournaments.id", ondelete="CASCADE"), nullable=False, index=True)
+    bracket_id = Column(String, ForeignKey("knockout_brackets.id", ondelete="CASCADE"), nullable=False, index=True)
+    round_id = Column(String, ForeignKey("knockout_rounds.id", ondelete="CASCADE"), nullable=True, index=True)
+    slot_number = Column(Integer, nullable=False)
+    team_a_id = Column(String, nullable=True, index=True)
+    team_b_id = Column(String, nullable=True, index=True)
+    winner_team_id = Column(String, nullable=True, index=True)
+    loser_next_match_id = Column(String, ForeignKey("matches.id", ondelete="SET NULL"), nullable=True)
+    loser_next_slot = Column(Integer, nullable=True)
+    status = Column(String, nullable=False, default="SCHEDULED", index=True)
+    scheduled_date = Column(Date, nullable=True)
+    start_time = Column(Time, nullable=True)
+    end_time = Column(Time, nullable=True)
+    format = Column(String, nullable=False, default="BO1")
+    score_a = Column(Integer, nullable=True)
+    score_b = Column(Integer, nullable=True)
+    kills_a = Column(Integer, nullable=True)
+    kills_b = Column(Integer, nullable=True)
+    deaths_a = Column(Integer, nullable=True)
+    deaths_b = Column(Integer, nullable=True)
+
+    bracket = relationship("KnockoutBracket")
+    round = relationship("KnockoutRound")
+
+    __table_args__ = (
+        UniqueConstraint("bracket_id", "round_id", "slot_number", name="uq_bracket_match_slot"),
     )

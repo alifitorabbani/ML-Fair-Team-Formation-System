@@ -22,6 +22,8 @@ from app.tournament.schemas.tournament_schemas import (
     MatchResultSubmit,
     StandingsOverride,
     PlacementSet,
+    BracketQualificationCreate,
+    ScheduleConfig,
     TournamentResponse,
     TournamentDateResponse,
     TournamentTeamResponse,
@@ -396,13 +398,26 @@ async def reopen_group_stage(tournament_id: str, x_user_token: Optional[str] = H
 
 
 @router.post("/{tournament_id}/schedule/generate", response_model=ScheduleGenerateResponse)
-async def generate_schedule(tournament_id: str, x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)):
+async def generate_schedule(tournament_id: str, config: Optional[ScheduleConfig] = None, x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)):
     _ = get_admin_user(x_user_token)
     service = ScheduleService(db)
     try:
-        result = await service.generate_schedule(tournament_id, created_by="admin")
+        result = await service.generate_schedule(
+            tournament_id,
+            created_by="admin",
+            start_date=config.start_date if config else None,
+            end_date=config.end_date if config else None,
+            match_duration_minutes=config.match_duration_minutes if config else None,
+            bo_format=config.bo_format if config else None,
+            min_rest_minutes=config.min_rest_minutes if config else None,
+            buffer_minutes=config.buffer_minutes if config else None,
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Schedule generation failed: {type(e).__name__}: {e}")
     return result
 
 
@@ -683,6 +698,57 @@ async def recalculate_standings(tournament_id: str, x_user_token: Optional[str] 
             }
         )
     return results
+
+
+@router.post("/{tournament_id}/bracket-qualifications")
+async def set_bracket_qualification(tournament_id: str, data: BracketQualificationCreate, x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)):
+    _ = get_admin_user(x_user_token)
+    from app.tournament.repositories.bracket_qualification_repository import BracketQualificationRepository
+    repo = BracketQualificationRepository(db)
+    existing = await repo.get_by_team(tournament_id, data.team_id)
+    if existing:
+        existing.bracket_type = data.bracket_type
+        existing.group_id = data.group_id
+        existing.rank = data.rank
+        await db.flush()
+        await db.refresh(existing)
+        return {"id": existing.id, "tournament_id": existing.tournament_id, "team_id": existing.team_id, "bracket_type": existing.bracket_type, "group_id": existing.group_id, "rank": existing.rank}
+    qualification = await repo.create({
+        "tournament_id": tournament_id,
+        "group_id": data.group_id,
+        "team_id": data.team_id,
+        "bracket_type": data.bracket_type,
+        "rank": data.rank,
+    })
+    return {"id": qualification.id, "tournament_id": qualification.tournament_id, "team_id": qualification.team_id, "bracket_type": qualification.bracket_type, "group_id": qualification.group_id, "rank": qualification.rank}
+
+
+@router.get("/{tournament_id}/bracket-qualifications")
+async def get_bracket_qualifications(tournament_id: str, x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)):
+    _ = get_admin_user(x_user_token)
+    from app.tournament.repositories.bracket_qualification_repository import BracketQualificationRepository
+    repo = BracketQualificationRepository(db)
+    qualifications = await repo.get_by_tournament(tournament_id)
+    return [
+        {
+            "id": q.id,
+            "tournament_id": q.tournament_id,
+            "group_id": q.group_id,
+            "team_id": q.team_id,
+            "bracket_type": q.bracket_type,
+            "rank": q.rank,
+        }
+        for q in qualifications
+    ]
+
+
+@router.delete("/{tournament_id}/bracket-qualifications")
+async def clear_bracket_qualifications(tournament_id: str, x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)):
+    _ = get_admin_user(x_user_token)
+    from app.tournament.repositories.bracket_qualification_repository import BracketQualificationRepository
+    repo = BracketQualificationRepository(db)
+    await repo.delete_by_tournament(tournament_id)
+    return {"message": "Bracket qualifications cleared"}
 
 
 @router.post("/{tournament_id}/knockout/generate")

@@ -181,10 +181,14 @@ export async function adminClearGroups(token: string, tournamentId: string): Pro
   return response.json()
 }
 
-export async function adminGenerateSchedule(token: string, tournamentId: string): Promise<ScheduleGenerateResponse> {
+export async function adminGenerateSchedule(token: string, tournamentId: string, config?: { start_date?: string; end_date?: string; match_duration_minutes?: number; bo_format?: string; min_rest_minutes?: number; buffer_minutes?: number }): Promise<ScheduleGenerateResponse> {
   const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/schedule/generate`, {
     method: 'POST',
-    headers: { 'X-User-Token': token },
+    headers: {
+      'Content-Type': 'application/json',
+      'X-User-Token': token,
+    },
+    body: JSON.stringify(config || {}),
   })
   if (!response.ok) {
     const error = await response.json()
@@ -349,6 +353,49 @@ export async function adminAdvanceKnockout(token: string, tournamentId: string, 
   if (!response.ok) {
     const error = await response.json()
     throw new Error(error.detail || 'Failed to advance knockout')
+  }
+  return response.json()
+}
+
+export async function adminSetBracketQualification(token: string | null, tournamentId: string, data: { team_id: string; bracket_type: string; group_id?: string; rank?: number }): Promise<any> {
+  const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/bracket-qualifications`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'X-User-Token': token } : {}),
+    },
+    body: JSON.stringify(data),
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to set bracket qualification')
+  }
+  return response.json()
+}
+
+export async function adminGetBracketQualifications(token: string | null, tournamentId: string): Promise<any[]> {
+  const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/bracket-qualifications`, {
+    headers: {
+      ...(token ? { 'X-User-Token': token } : {}),
+    },
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to fetch bracket qualifications')
+  }
+  return response.json()
+}
+
+export async function adminClearBracketQualifications(token: string | null, tournamentId: string): Promise<any> {
+  const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/bracket-qualifications`, {
+    method: 'DELETE',
+    headers: {
+      ...(token ? { 'X-User-Token': token } : {}),
+    },
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to clear bracket qualifications')
   }
   return response.json()
 }

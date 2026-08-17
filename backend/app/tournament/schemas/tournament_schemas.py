@@ -162,10 +162,26 @@ class MatchResultOCRResponse(BaseModel):
     deaths_a: Optional[int] = None
     deaths_b: Optional[int] = None
     winner_team_id: Optional[str] = None
-    confidence: float
-    is_valid: bool
+    confidence: float = 0.0
+    is_valid: bool = False
     validation_message: Optional[str] = None
     raw_text: Optional[str] = None
+
+
+class BracketQualificationCreate(BaseModel):
+    group_id: Optional[str] = None
+    team_id: str
+    bracket_type: str
+    rank: Optional[int] = None
+
+
+class ScheduleConfig(BaseModel):
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    match_duration_minutes: int = 45
+    bo_format: str = "BO1"
+    min_rest_minutes: int = 60
+    buffer_minutes: int = 0
 
 
 class StandingsOverride(BaseModel):

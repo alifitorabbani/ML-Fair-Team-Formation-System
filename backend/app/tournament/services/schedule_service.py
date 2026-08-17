@@ -38,7 +38,17 @@ class ScheduleService:
         self.standing_repo = GroupStandingRepository(db)
         self.schedule_version_repo = ScheduleVersionRepository(db)
 
-    async def generate_schedule(self, tournament_id: str, created_by: Optional[str] = None) -> ScheduleGenerateResponse:
+    async def generate_schedule(
+        self,
+        tournament_id: str,
+        created_by: Optional[str] = None,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        match_duration_minutes: Optional[int] = None,
+        bo_format: Optional[str] = None,
+        min_rest_minutes: Optional[int] = None,
+        buffer_minutes: Optional[int] = None,
+    ) -> ScheduleGenerateResponse:
         tournament = await self.tournament_repo.get_by_id(tournament_id)
         if not tournament:
             raise ValueError("Tournament not found")
@@ -54,9 +64,12 @@ class ScheduleService:
                 config = json.loads(tournament.config_json)
             except Exception:
                 config = {}
-        min_rest = config.get("min_rest_minutes", 60)
-        buffer_minutes = config.get("buffer_minutes", 0)
-        match_duration = config.get("match_duration_minutes", 45)
+        effective_min_rest = min_rest_minutes if min_rest_minutes is not None else config.get("min_rest_minutes", 60)
+        effective_buffer = buffer_minutes if buffer_minutes is not None else config.get("buffer_minutes", 0)
+        effective_match_duration = match_duration_minutes if match_duration_minutes is not None else config.get("match_duration_minutes", 45)
+        effective_bo = bo_format or config.get("bo_format", BOFormat.BO1.value)
+        if effective_bo not in [e.value for e in BOFormat]:
+            effective_bo = BOFormat.BO1.value
         existing_matches = await self.match_repo.get_by_tournament(tournament_id)
         for m in existing_matches:
             await self.match_repo.delete(m.id)
@@ -68,14 +81,18 @@ class ScheduleService:
             matches_to_schedule.append((team_list[i], team_list[i + 1]))
         slots = []
         for date_obj in dates:
+            if start_date and date_obj.date < start_date:
+                continue
+            if end_date and date_obj.date > end_date:
+                continue
             current = datetime.combine(date_obj.date, date_obj.start_time)
             end = datetime.combine(date_obj.date, date_obj.end_time)
-            slot_duration = timedelta(minutes=match_duration + buffer_minutes)
-            while current + timedelta(minutes=match_duration) <= end:
+            slot_duration = timedelta(minutes=effective_match_duration + effective_buffer)
+            while current + timedelta(minutes=effective_match_duration) <= end:
                 slots.append({
                     "date": date_obj.date,
                     "start": current.time(),
-                    "end": (current + timedelta(minutes=match_duration)).time(),
+                    "end": (current + timedelta(minutes=effective_match_duration)).time(),
                     "available": True,
                 })
                 current += slot_duration
@@ -95,8 +112,8 @@ class ScheduleService:
                     continue
                 slot_start = datetime.combine(slot["date"], slot["start"])
                 slot_end = datetime.combine(slot["date"], slot["end"])
-                conflict_a = team_a in team_last_end and (slot_start - team_last_end[team_a]).total_seconds() < min_rest * 60
-                conflict_b = team_b in team_last_end and (slot_start - team_last_end[team_b]).total_seconds() < min_rest * 60
+                conflict_a = team_a in team_last_end and (slot_start - team_last_end[team_a]).total_seconds() < effective_min_rest * 60
+                conflict_b = team_b in team_last_end and (slot_start - team_last_end[team_b]).total_seconds() < effective_min_rest * 60
                 if conflict_a or conflict_b:
                     continue
                 team_last_end[team_a] = slot_end
@@ -113,7 +130,7 @@ class ScheduleService:
                         "end_time": slot["end"],
                         "team_a_id": team_a,
                         "team_b_id": team_b,
-                        "format": BOFormat.BO1.value,
+                        "format": effective_bo,
                         "status": MatchStatus.SCHEDULED,
                     }
                 )
@@ -123,7 +140,7 @@ class ScheduleService:
                     "end_time": slot["end"].isoformat(),
                     "team_a_id": team_a,
                     "team_b_id": team_b,
-                    "format": BOFormat.BO1.value,
+                    "format": effective_bo,
                 })
                 slots[idx]["available"] = False
                 slot_idx = (idx + 1) % len(slots)
@@ -150,7 +167,7 @@ class ScheduleService:
         min_rest_gap = min(rest_gaps) if rest_gaps else None
         avg_rest_gap = sum(rest_gaps) / len(rest_gaps) if rest_gaps else None
         max_rest_gap = max(rest_gaps) if rest_gaps else None
-        conflicts = sum(1 for gap in rest_gaps if gap < min_rest)
+        conflicts = sum(1 for gap in rest_gaps if gap < effective_min_rest)
         fairness_score = self._compute_fairness_score(rest_gaps, team_match_count, date_match_count)
         await self.save_schedule_version(tournament_id, created_by=created_by, notes="Auto-generated schedule")
         tournament.status = "SCHEDULE_GENERATED"

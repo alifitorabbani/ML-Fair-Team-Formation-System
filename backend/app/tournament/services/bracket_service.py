@@ -28,6 +28,7 @@ from app.tournament.constants import (
     BracketType,
     ThirdPlaceMode,
     BracketLoserRule,
+    BOFormat,
 )
 
 
@@ -112,6 +113,7 @@ class BracketService:
             slot.team_id = None
             slot.status = "FILLED"
             await self.db.flush()
+            bo_format = self._get_bo_format_for_match(bracket.bracket_type, first_round.round_number, rounds)
             match = await self.match_repo.create(
                 {
                     "tournament_id": tournament_id,
@@ -124,7 +126,7 @@ class BracketService:
                     "end_time": datetime.utcnow().time(),
                     "team_a_id": team_a,
                     "team_b_id": team_b,
-                    "format": "BO3",
+                    "format": bo_format,
                     "status": MatchStatus.SCHEDULED,
                 }
             )
@@ -150,6 +152,7 @@ class BracketService:
             current_round = next((r for r in rounds if r.round_number == match.round), None)
             if current_round:
                 await self._advance_to_next_round(match, winner_id, loser_id, current_round, rounds)
+        await self._maybe_create_grand_final(tournament_id)
         tournament = await self.tournament_repo.get_by_id(tournament_id)
         if tournament and tournament.status == TournamentStatus.KNOCKOUT:
             tournament.status = TournamentStatus.FINAL
@@ -158,25 +161,55 @@ class BracketService:
             await self.db.refresh(tournament)
         return match
 
+    async def _maybe_create_grand_final(self, tournament_id: str):
+        brackets = await self.bracket_repo.get_by_tournament(tournament_id)
+        upper_bracket = next((b for b in brackets if b.bracket_type == BracketType.UPPER), None)
+        lower_bracket = next((b for b in brackets if b.bracket_type == BracketType.LOWER), None)
+        if not upper_bracket or not lower_bracket:
+            return
+        existing_grand_final = await self.match_repo.get_by_tournament(tournament_id, MatchStage.KNOCKOUT)
+        grand_final_exists = any(m.bracket_id is None and m.round is None for m in existing_grand_final)
+        if grand_final_exists:
+            return
+        upper_winner = self._get_bracket_winner(tournament_id, upper_bracket.id)
+        lower_winner = self._get_bracket_winner(tournament_id, lower_bracket.id)
+        if not upper_winner or not lower_winner:
+            return
+        await self.match_repo.create(
+            {
+                "tournament_id": tournament_id,
+                "stage": MatchStage.KNOCKOUT,
+                "bracket_id": None,
+                "round": None,
+                "match_number": 1,
+                "scheduled_date": datetime.utcnow().date(),
+                "start_time": datetime.utcnow().time(),
+                "end_time": datetime.utcnow().time(),
+                "team_a_id": upper_winner,
+                "team_b_id": lower_winner,
+                "format": BOFormat.BO7.value,
+                "status": MatchStatus.SCHEDULED,
+            }
+        )
+
+    async def _get_bracket_winner(self, tournament_id: str, bracket_id: str) -> Optional[str]:
+        bracket = await self.bracket_repo.get_by_tournament(tournament_id)
+        target = next((b for b in bracket if b.id == bracket_id), None)
+        if not target:
+            return None
+        rounds = await self.round_repo.get_by_bracket(bracket_id)
+        if not rounds:
+            return None
+        last_round = rounds[-1]
+        slots = await self.slot_repo.get_by_round(last_round.id)
+        for slot in slots:
+            if slot.team_id and slot.status == "FILLED":
+                return slot.team_id
+        return None
+
     async def _advance_in_bracket(self, match: Match, winner_id: str, loser_id: str, bracket: KnockoutBracket):
         if bracket.bracket_type == BracketType.UPPER:
-            config = {}
-            if bracket.tournament and bracket.tournament.knockout_config_json:
-                try:
-                    config = json.loads(bracket.tournament.knockout_config_json)
-                except Exception:
-                    config = {}
-            rule = config.get("upper_loser_rule", BracketLoserRule.ELIMINATED)
-            if rule == BracketLoserRule.TO_MIDDLE:
-                await self._move_loser_to_bracket(match.tournament_id, loser_id, BracketType.MIDDLE)
-            elif rule == BracketLoserRule.TO_LOWER:
-                await self._move_loser_to_bracket(match.tournament_id, loser_id, BracketType.LOWER)
-            else:
-                pass
-        elif bracket.bracket_type == BracketType.MIDDLE:
-            rule = "TO_LOWER"
-            if rule == BracketLoserRule.TO_LOWER:
-                await self._move_loser_to_bracket(match.tournament_id, loser_id, BracketType.LOWER)
+            await self._move_loser_to_bracket(match.tournament_id, loser_id, BracketType.LOWER)
         elif bracket.bracket_type == BracketType.LOWER:
             pass
 
@@ -220,6 +253,7 @@ class BracketService:
                     if opponents:
                         team_a = slot.team_id
                         team_b = opponents[0].team_id
+                        bo_format = self._get_bo_format_for_match(match.bracket_id, next_round.round_number, all_rounds)
                         next_match = await self.match_repo.create(
                             {
                                 "tournament_id": match.tournament_id,
@@ -232,15 +266,24 @@ class BracketService:
                                 "end_time": datetime.utcnow().time(),
                                 "team_a_id": team_a,
                                 "team_b_id": team_b,
-                                "format": "BO3",
+                                "format": bo_format,
                                 "status": MatchStatus.SCHEDULED,
                             }
                         )
                         await self.slot_repo.update(slot.id, {"next_match_id": next_match.id, "next_slot_number": slot.slot_number})
                         break
 
+    def _get_bo_format_for_match(self, bracket_id: str, round_number: int, all_rounds: List[KnockoutRound]) -> str:
+        max_round = max(r.round_number for r in all_rounds) if all_rounds else 1
+        if round_number == max_round:
+            if max_round == 1:
+                return BOFormat.BO5.value
+            return BOFormat.BO5.value
+        return BOFormat.BO3.value
+
     async def get_bracket(self, tournament_id: str) -> List[Dict[str, Any]]:
         brackets = await self.bracket_repo.get_by_tournament(tournament_id)
+        all_matches = await self.match_repo.get_by_tournament(tournament_id, MatchStage.KNOCKOUT)
         results = []
         for bracket in brackets:
             rounds = await self.round_repo.get_by_bracket(bracket.id)
@@ -249,6 +292,8 @@ class BracketService:
                 slots = await self.slot_repo.get_by_round(round_obj.id)
                 slots_data = []
                 for slot in slots:
+                    slot_matches = [m for m in all_matches if m.bracket_id == bracket.id and m.round == round_obj.round_number and (m.team_a_id == slot.team_id or m.team_b_id == slot.team_id)]
+                    match = slot_matches[0] if slot_matches else None
                     slots_data.append(
                         {
                             "id": slot.id,
@@ -257,6 +302,16 @@ class BracketService:
                             "next_match_id": slot.next_match_id,
                             "next_slot_number": slot.next_slot_number,
                             "status": slot.status,
+                            "match": {
+                                "id": match.id if match else None,
+                                "team_a_id": match.team_a_id if match else None,
+                                "team_b_id": match.team_b_id if match else None,
+                                "winner_team_id": match.winner_team_id if match else None,
+                                "status": match.status if match else None,
+                                "format": match.format if match else None,
+                                "score_a": match.score_a if match else None,
+                                "score_b": match.score_b if match else None,
+                            } if match else None,
                         }
                     )
                 rounds_data.append(
