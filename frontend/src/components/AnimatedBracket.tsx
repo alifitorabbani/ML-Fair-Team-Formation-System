@@ -40,6 +40,7 @@ interface BracketProps {
   grandFinal: BracketMatch | null
   token: string | null
   tournamentId: string
+  getTeamName?: (teamId: string | null) => string
   onMatchUpdate?: () => void
   onAdvance?: (matchId: string) => void
 }
@@ -57,7 +58,7 @@ function getRequiredWins(format: string): number {
   }
 }
 
-function BracketMatchCard({ match, index, isFinal, isGrandFinal, token, tournamentId, onMatchUpdate, onAdvance }: { match: BracketMatch; index: number; isFinal?: boolean; isGrandFinal?: boolean; token: string | null; tournamentId: string; onMatchUpdate?: () => void; onAdvance?: (matchId: string) => void }) {
+function BracketMatchCard({ match, index, isFinal, isGrandFinal, token, tournamentId, getTeamName, onMatchUpdate, onAdvance }: { match: BracketMatch; index: number; isFinal?: boolean; isGrandFinal?: boolean; token: string | null; tournamentId: string; getTeamName?: (teamId: string | null) => string; onMatchUpdate?: () => void; onAdvance?: (matchId: string) => void }) {
   const [animated, setAnimated] = useState(false)
   const [mapResults, setMapResults] = useState<Record<number, { team_a_wins: number; team_b_wins: number; maps: any[] }>>({})
   const [submitting, setSubmitting] = useState(false)
@@ -98,6 +99,12 @@ function BracketMatchCard({ match, index, isFinal, isGrandFinal, token, tourname
   }
 
   const requiredWins = getRequiredWins(match.format)
+
+  const displayTeamName = (teamId: string | null | undefined) => {
+    if (!teamId) return 'TBD'
+    if (getTeamName) return getTeamName(teamId)
+    return teamId
+  }
 
   const handleAdvance = async () => {
     if (!token || !onAdvance || advancing) return
@@ -223,7 +230,7 @@ function BracketMatchCard({ match, index, isFinal, isGrandFinal, token, tourname
         {lastMap ? (
           <div className="flex items-center gap-2">
             <span className={`text-xs ${lastMap.winner_team_id === match.team_a_id ? 'text-green-400' : 'text-red-400'}`}>
-              {lastMap.winner_team_id === match.team_a_id ? match.team_a_id : match.team_b_id} wins
+              {displayTeamName(lastMap.winner_team_id)} wins
             </span>
           </div>
         ) : (
@@ -233,14 +240,14 @@ function BracketMatchCard({ match, index, isFinal, isGrandFinal, token, tourname
               disabled={submitting}
               className="rounded-lg border border-green-500/30 px-2 py-1 text-xs text-green-300 hover:bg-green-500/10 disabled:opacity-50"
             >
-              {match.team_a_id} Win
+              {displayTeamName(match.team_a_id)} Win
             </button>
             <button
               onClick={() => handleMapSubmit(mapNumber, false)}
               disabled={submitting}
               className="rounded-lg border border-red-500/30 px-2 py-1 text-xs text-red-300 hover:bg-red-500/10 disabled:opacity-50"
             >
-              {match.team_b_id} Win
+              {displayTeamName(match.team_b_id)} Win
             </button>
           </div>
         )}
@@ -258,11 +265,11 @@ function BracketMatchCard({ match, index, isFinal, isGrandFinal, token, tourname
       </div>
       <div className={`space-y-1 ${getTextColor()}`}>
         <div className={`flex items-center justify-between rounded-lg px-2 py-1 ${match.winner_team_id === match.team_a_id ? 'bg-white/10' : 'bg-white/5'}`}>
-          <span className="text-sm font-medium">{match.team_a_id || 'TBD'}</span>
+          <span className="text-sm font-medium">{displayTeamName(match.team_a_id)}</span>
           {match.score_a !== undefined && <span className="text-xs">{match.score_a}</span>}
         </div>
         <div className={`flex items-center justify-between rounded-lg px-2 py-1 ${match.winner_team_id === match.team_b_id ? 'bg-white/10' : 'bg-white/5'}`}>
-          <span className="text-sm font-medium">{match.team_b_id || 'TBD'}</span>
+          <span className="text-sm font-medium">{displayTeamName(match.team_b_id)}</span>
           {match.score_b !== undefined && <span className="text-xs">{match.score_b}</span>}
         </div>
       </div>
@@ -274,7 +281,7 @@ function BracketMatchCard({ match, index, isFinal, isGrandFinal, token, tourname
       {match.status === 'COMPLETED' && match.winner_team_id && (
         <div className="mt-2 space-y-2">
           <div className="text-xs text-green-400">
-            Winner: {match.winner_team_id}
+            Winner: {displayTeamName(match.winner_team_id)}
           </div>
           {onAdvance && match.next_match_id && (
             <button
@@ -298,8 +305,8 @@ function BracketMatchCard({ match, index, isFinal, isGrandFinal, token, tourname
                 className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
               >
                 <option value="">- Pilih Winner -</option>
-                <option value={match.team_a_id}>{match.team_a_id}</option>
-                <option value={match.team_b_id}>{match.team_b_id}</option>
+                <option value={match.team_a_id}>{displayTeamName(match.team_a_id)}</option>
+                <option value={match.team_b_id}>{displayTeamName(match.team_b_id)}</option>
               </select>
             </div>
             <div>
@@ -310,8 +317,8 @@ function BracketMatchCard({ match, index, isFinal, isGrandFinal, token, tourname
                 className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
               >
                 <option value="">- Pilih Loser -</option>
-                <option value={match.team_a_id}>{match.team_a_id}</option>
-                <option value={match.team_b_id}>{match.team_b_id}</option>
+                <option value={match.team_a_id}>{displayTeamName(match.team_a_id)}</option>
+                <option value={match.team_b_id}>{displayTeamName(match.team_b_id)}</option>
               </select>
             </div>
           </div>
@@ -329,7 +336,7 @@ function BracketMatchCard({ match, index, isFinal, isGrandFinal, token, tourname
   )
 }
 
-export default function AnimatedBracket({ upperMatches, lowerMatches, grandFinal, token, tournamentId, onMatchUpdate, onAdvance }: BracketProps) {
+export default function AnimatedBracket({ upperMatches, lowerMatches, grandFinal, token, tournamentId, getTeamName, onMatchUpdate, onAdvance }: BracketProps) {
   const [showUpper, setShowUpper] = useState(false)
   const [showLower, setShowLower] = useState(false)
   const [showGrandFinal, setShowGrandFinal] = useState(false)
@@ -363,6 +370,7 @@ export default function AnimatedBracket({ upperMatches, lowerMatches, grandFinal
                 isFinal={match.is_upper_final}
                 token={token}
                 tournamentId={tournamentId}
+                getTeamName={getTeamName}
                 onMatchUpdate={onMatchUpdate}
                 onAdvance={onAdvance}
               />
@@ -388,6 +396,7 @@ export default function AnimatedBracket({ upperMatches, lowerMatches, grandFinal
                 isFinal={match.is_lower_final}
                 token={token}
                 tournamentId={tournamentId}
+                getTeamName={getTeamName}
                 onMatchUpdate={onMatchUpdate}
                 onAdvance={onAdvance}
               />
@@ -413,6 +422,7 @@ export default function AnimatedBracket({ upperMatches, lowerMatches, grandFinal
               isGrandFinal
               token={token}
               tournamentId={tournamentId}
+              getTeamName={getTeamName}
               onMatchUpdate={onMatchUpdate}
               onAdvance={onAdvance}
             />

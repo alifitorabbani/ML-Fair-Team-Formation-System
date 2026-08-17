@@ -27,6 +27,7 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
   const [bracketQualifications, setBracketQualifications] = useState<any[]>([])
   const [dailyStandings, setDailyStandings] = useState<any[]>([])
   const [selectedDate, setSelectedDate] = useState<string>('')
+  const [teams, setTeams] = useState<Record<string, string>>({})
   const [showCreateGroup, setShowCreateGroup] = useState(false)
   const [newGroupName, setNewGroupName] = useState('')
   const [creatingGroup, setCreatingGroup] = useState(false)
@@ -46,13 +47,21 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
     try {
       const data = await adminGetTournament(token, tournamentId)
       setTournament(data)
-      const [g, s, st, k, bq] = await Promise.all([
+      const [g, s, st, k, bq, t] = await Promise.all([
         adminGetGroups(token, tournamentId),
         adminGetSchedule(token, tournamentId),
         adminGetStandings(token, tournamentId),
         adminGetKnockout(token, tournamentId),
         adminGetBracketQualifications(token, tournamentId),
+        adminGetTournamentTeams(token, tournamentId),
       ])
+      const teamMap: Record<string, string> = {}
+      t.forEach((team: any) => {
+        if (team.team_id) {
+          teamMap[team.team_id] = team.team_name_snapshot || team.team_id
+        }
+      })
+      setTeams(teamMap)
       setGroups(g)
       setSchedule(s)
       setStandings(st)
@@ -84,6 +93,11 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
     } catch {
       setDailyStandings([])
     }
+  }
+
+  const getTeamName = (teamId: string | null | undefined) => {
+    if (!teamId) return 'TBD'
+    return teams[teamId] || teamId
   }
 
   useEffect(() => {
@@ -151,6 +165,7 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
   }
 
   const [matchResults, setMatchResults] = useState<Record<string, { score_a: number; score_b: number; kills_a: number; kills_b: number; deaths_a: number; deaths_b: number; winner_team_id?: string; loser_team_id?: string }>>({})
+  const [bracketMapResults, setBracketMapResults] = useState<Record<string, Array<{ map_number: number; winner_team_id?: string }>>>({})
 
   const updateMatchResult = (matchId: string, field: string, value: number | string) => {
     setMatchResults((prev) => ({
@@ -162,10 +177,81 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
     }))
   }
 
-  const handleSubmitMatchResult = async (matchId: string) => {
+  const updateBracketMapResult = (matchId: string, mapNumber: number, winnerTeamId: string) => {
+    setBracketMapResults((prev) => {
+      const current = prev[matchId] || []
+      const existing = current.find((m) => m.map_number === mapNumber)
+      if (existing) {
+        return {
+          ...prev,
+          [matchId]: current.map((m) => m.map_number === mapNumber ? { ...m, winner_team_id: winnerTeamId } : m),
+        }
+      }
+      return {
+        ...prev,
+        [matchId]: [...current, { map_number: mapNumber, winner_team_id: winnerTeamId }],
+      }
+    })
+  }
+
+  const handleSubmitMatchResult = async (matchId: string, matchFormat: string = 'BO1') => {
     if (!token) return
     const data = matchResults[matchId]
     if (!data) return
+    const match = schedule.find((m: any) => m.id === matchId)
+    const teamAId = match?.team_a_id
+    const teamBId = match?.team_b_id
+    
+    // For bracket matches (BO3/BO5/BO7), require map_results
+    if (matchFormat !== 'BO1') {
+      const mapResults = bracketMapResults[matchId] || []
+      const requiredWins = matchFormat === 'BO3' ? 2 : matchFormat === 'BO5' ? 3 : matchFormat === 'BO7' ? 4 : 1
+      
+      if (!data.winner_team_id || !data.loser_team_id) {
+        setMatchError('Winner dan Loser harus dipilih')
+        return
+      }
+      if (data.winner_team_id === data.loser_team_id) {
+        setMatchError('Winner dan Loser tidak boleh sama')
+        return
+      }
+      
+      // Count wins from map results
+      const teamAWins = mapResults.filter((m) => m.winner_team_id === data.winner_team_id).length
+      const teamBWins = mapResults.filter((m) => m.winner_team_id === data.loser_team_id).length
+      
+      if (data.winner_team_id && teamAWins !== requiredWins && teamBWins !== requiredWins) {
+        setMatchError(`Breakdown harus menunjukkan ${requiredWins} kemenangan untuk winner`)
+        return
+      }
+      
+      setSaving(true)
+      setMatchError(null)
+      try {
+        const payload = {
+          ...data,
+          map_results: mapResults.map((m, idx) => ({
+            map_number: m.map_number || idx + 1,
+            team_a_id: teamAId,
+            team_b_id: teamBId,
+            winner_team_id: m.winner_team_id,
+            status: 'COMPLETED',
+          })),
+        }
+        await adminSubmitMatchResult(token, tournamentId, matchId, payload)
+        setMessage('Hasil pertandingan berhasil disimpan')
+        setMatchResults((prev) => { const next = { ...prev }; delete next[matchId]; return next })
+        setBracketMapResults((prev) => { const next = { ...prev }; delete next[matchId]; return next })
+        load()
+      } catch (err) {
+        setMatchError(err instanceof Error ? err.message : 'Gagal menyimpan hasil')
+      } finally {
+        setSaving(false)
+      }
+      return
+    }
+    
+    // Group stage (BO1) logic
     if (data.score_a === data.score_b) {
       setMatchError('Score tidak boleh sama')
       return
@@ -183,6 +269,7 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
     try {
       await adminSubmitMatchResult(token, tournamentId, matchId, data)
       setMessage('Hasil pertandingan berhasil disimpan')
+      setMatchResults((prev) => { const next = { ...prev }; delete next[matchId]; return next })
       load()
     } catch (err) {
       setMatchError(err instanceof Error ? err.message : 'Gagal menyimpan hasil')
@@ -513,7 +600,7 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
                   <Card key={m.id}>
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
-                        <div className="text-sm font-medium text-white">{m.team_a_id} vs {m.team_b_id}</div>
+                        <div className="text-sm font-medium text-white">{getTeamName(m.team_a_id)} vs {getTeamName(m.team_b_id)}</div>
                         <div className="text-xs text-gray-400">{m.scheduled_date} • {m.start_time} - {m.end_time} • {m.format}</div>
                       </div>
                       <span className={`rounded-full px-2 py-1 text-xs font-medium ${isCompleted ? 'bg-green-500/10 text-green-300' : 'bg-gray-500/10 text-gray-300'}`}>
@@ -531,7 +618,7 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
                       <div className="mt-3 space-y-2">
                         <div className="grid gap-2 md:grid-cols-2">
                           <div>
-                            <label className="mb-1 block text-xs text-gray-400">Score {m.team_a_id}</label>
+                            <label className="mb-1 block text-xs text-gray-400">Score {getTeamName(m.team_a_id)}</label>
                             <input
                               type="number"
                               min={0}
@@ -541,7 +628,7 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
                             />
                           </div>
                           <div>
-                            <label className="mb-1 block text-xs text-gray-400">Score {m.team_b_id}</label>
+                            <label className="mb-1 block text-xs text-gray-400">Score {getTeamName(m.team_b_id)}</label>
                             <input
                               type="number"
                               min={0}
@@ -551,7 +638,7 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
                             />
                           </div>
                           <div>
-                            <label className="mb-1 block text-xs text-gray-400">Kills {m.team_a_id}</label>
+                            <label className="mb-1 block text-xs text-gray-400">Kills {getTeamName(m.team_a_id)}</label>
                             <input
                               type="number"
                               min={0}
@@ -561,7 +648,7 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
                             />
                           </div>
                           <div>
-                            <label className="mb-1 block text-xs text-gray-400">Kills {m.team_b_id}</label>
+                            <label className="mb-1 block text-xs text-gray-400">Kills {getTeamName(m.team_b_id)}</label>
                             <input
                               type="number"
                               min={0}
@@ -571,7 +658,7 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
                             />
                           </div>
                           <div>
-                            <label className="mb-1 block text-xs text-gray-400">Deaths {m.team_a_id}</label>
+                            <label className="mb-1 block text-xs text-gray-400">Deaths {getTeamName(m.team_a_id)}</label>
                             <input
                               type="number"
                               min={0}
@@ -581,7 +668,7 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
                             />
                            </div>
                            <div>
-                             <label className="mb-1 block text-xs text-gray-400">Deaths {m.team_b_id}</label>
+                             <label className="mb-1 block text-xs text-gray-400">Deaths {getTeamName(m.team_b_id)}</label>
                              <input
                                type="number"
                                min={0}
@@ -600,8 +687,8 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
                                className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
                              >
                                <option value="">- Pilih Winner -</option>
-                               <option value={m.team_a_id}>{m.team_a_id}</option>
-                               <option value={m.team_b_id}>{m.team_b_id}</option>
+                               <option value={m.team_a_id}>{getTeamName(m.team_a_id)}</option>
+                               <option value={m.team_b_id}>{getTeamName(m.team_b_id)}</option>
                              </select>
                            </div>
                            <div>
@@ -612,23 +699,50 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
                                className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
                              >
                                <option value="">- Pilih Loser -</option>
-                               <option value={m.team_a_id}>{m.team_a_id}</option>
-                               <option value={m.team_b_id}>{m.team_b_id}</option>
+                               <option value={m.team_a_id}>{getTeamName(m.team_a_id)}</option>
+                               <option value={m.team_b_id}>{getTeamName(m.team_b_id)}</option>
                              </select>
-                           </div>
-                         </div>
-                         <button
-                           onClick={() => handleSubmitMatchResult(m.id)}
-                           disabled={saving}
-                           className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500 disabled:opacity-50"
-                         >
-                           {saving ? 'Menyimpan...' : 'Simpan Hasil'}
-                         </button>
-                       </div>
-                     )}
-                  </Card>
-                )
-              })}
+                            </div>
+                          </div>
+                          {m.format !== 'BO1' && (
+                            <div className="space-y-1">
+                              <label className="mb-1 block text-xs text-gray-400">Hasil Map</label>
+                              {Array.from({ length: Math.min((m.format === 'BO3' ? 2 : m.format === 'BO5' ? 3 : m.format === 'BO7' ? 4 : 1) * 2 - 1, 7) }, (_, i) => {
+                                const mapResult = (bracketMapResults[m.id] || []).find((r) => r.map_number === i + 1)
+                                return (
+                                  <div key={i} className="flex items-center justify-between rounded-lg border border-white/10 bg-surface-900/40 px-3 py-2">
+                                    <span className="text-xs text-gray-400">Map {i + 1}</span>
+                                  <select
+                                    value={mapResult?.winner_team_id || ''}
+                                    onChange={(e) => {
+                                      const value = e.target.value
+                                      if (value) {
+                                        updateBracketMapResult(m.id, i + 1, value)
+                                      }
+                                    }}
+                                    className="rounded-lg border border-white/10 bg-surface-900/60 px-2 py-1 text-xs text-white focus:border-brand-500 focus:outline-none"
+                                  >
+                                      <option value="">- Pilih Winner -</option>
+                                      <option value={m.team_a_id}>{getTeamName(m.team_a_id)}</option>
+                                      <option value={m.team_b_id}>{getTeamName(m.team_b_id)}</option>
+                                    </select>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )}
+                          <button
+                            onClick={() => handleSubmitMatchResult(m.id, m.format)}
+                            disabled={saving}
+                            className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500 disabled:opacity-50"
+                          >
+                            {saving ? 'Menyimpan...' : 'Simpan Hasil'}
+                          </button>
+                        </div>
+                      )}
+                   </Card>
+                 )
+               })}
             </div>
           )}
         </div>
@@ -643,7 +757,7 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
               <Card key={m.id}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <div className="text-sm font-medium text-white">{m.team_a_id} vs {m.team_b_id}</div>
+                    <div className="text-sm font-medium text-white">{getTeamName(m.team_a_id)} vs {getTeamName(m.team_b_id)}</div>
                     <div className="text-xs text-gray-400">{m.stage} • {m.scheduled_date} • {m.format}</div>
                   </div>
                   <span className={`rounded-full px-2 py-1 text-xs font-medium ${m.status === 'COMPLETED' ? 'bg-green-500/10 text-green-300' : 'bg-gray-500/10 text-gray-300'}`}>
@@ -681,7 +795,7 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
                   <tbody>
                     {group.standings.map((s: any) => {
                       const winRate = s.played > 0 ? ((s.win / s.played) * 100).toFixed(1) : '0.0'
-                      const qualification = bracketQualifications.find((q: any) => q.team_id === s.team_id)
+                      const qualification = bracketQualifications.find((q: any) => q.team_id === s.team_id && q.group_id === group.group_id)
                       const isEliminated = !qualification || !qualification.bracket_type
                       return (
                         <tr key={s.team_id} className={`border-b ${isEliminated ? 'bg-red-500/5' : 'border-white/5'}`}>
@@ -808,7 +922,8 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
                   alert(err instanceof Error ? err.message : 'Gagal generate bracket')
                 }
               }}
-              className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500"
+              disabled={schedule.some((m: any) => m.status !== 'COMPLETED')}
+              className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Generate Bracket
             </button>
@@ -822,7 +937,8 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
                   alert(err instanceof Error ? err.message : 'Gagal reset bracket')
                 }
               }}
-              className="rounded-xl border border-white/10 px-4 py-2 text-sm font-medium text-gray-300 hover:text-white"
+              disabled={!knockout || (knockout.upper_matches?.length === 0 && knockout.lower_matches?.length === 0 && !knockout.grand_final)}
+              className="rounded-xl border border-white/10 px-4 py-2 text-sm font-medium text-gray-300 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
               Reset Bracket
             </button>
@@ -836,6 +952,7 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
               grandFinal={knockout.grand_final || null}
               token={token}
               tournamentId={tournamentId}
+              getTeamName={getTeamName}
               onMatchUpdate={load}
               onAdvance={async (matchId: string) => {
                 if (!token) return
@@ -857,7 +974,7 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
               <Card key={m.id}>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
-                    <div className="text-sm font-medium text-white">{m.team_a_id} vs {m.team_b_id}</div>
+                    <div className="text-sm font-medium text-white">{getTeamName(m.team_a_id)} vs {getTeamName(m.team_b_id)}</div>
                     <div className="text-xs text-gray-400">{m.stage} • {m.scheduled_date}</div>
                   </div>
                   <div className="flex items-center gap-2">
