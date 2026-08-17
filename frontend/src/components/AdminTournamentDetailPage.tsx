@@ -96,6 +96,16 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
   }
 
   if (!tournament) {
+    if (error) {
+      return (
+        <div className="flex flex-col items-center justify-center gap-4 py-20">
+          <ErrorMessage title="Error" message={error} />
+          <button onClick={onBack} className="rounded-xl border border-white/10 px-4 py-2 text-sm text-gray-300 hover:text-white">
+            Kembali
+          </button>
+        </div>
+      )
+    }
     return <div className="flex items-center justify-center py-20"><LoadingSpinner text="Memuat..." /></div>
   }
 
