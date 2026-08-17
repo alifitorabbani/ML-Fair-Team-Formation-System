@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { adminGetTournament, adminUpdateTournament, adminGetTournamentTeams, adminGetAvailableTeams, adminCreateGroup, adminUpdateGroup, adminGetGroups, adminClearGroups, adminAutoAssignGroups, adminGenerateSchedule, adminGetSchedule, adminGetStandings, adminRecalculateStandings, adminOverrideStandings, adminCreateMatch, adminUpdateMatch, adminDeleteMatch, adminSubmitMatchResult, adminConfirmMatchResult, adminGenerateKnockout, adminGetKnockout, adminAdvanceKnockout, adminSetPlacement, adminFinalizeChampion, adminSetBracketQualification, adminGetBracketQualifications, adminClearBracketQualifications, adminResetBracket } from '@/lib/tournamentApi'
+import { adminGetTournament, adminUpdateTournament, adminGetTournamentTeams, adminGetAvailableTeams, adminCreateGroup, adminUpdateGroup, adminGetGroups, adminClearGroups, adminAutoAssignGroups, adminGenerateSchedule, adminGetSchedule, adminGetStandings, adminRecalculateStandings, adminOverrideStandings, adminCreateMatch, adminUpdateMatch, adminDeleteMatch, adminSubmitMatchResult, adminConfirmMatchResult, adminGenerateKnockout, adminGetKnockout, adminAdvanceKnockout, adminSetPlacement, adminFinalizeChampion, adminSetBracketQualification, adminGetBracketQualifications, adminClearBracketQualifications, adminResetBracket, adminGetDailyStandings } from '@/lib/tournamentApi'
 import { useAuthToken } from '@/lib/hooks/useAuth'
 import { TournamentResponse } from '@/types'
 import LoadingSpinner from '@/components/shared/LoadingSpinner'
@@ -25,6 +25,8 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
   const [knockout, setKnockout] = useState<{ upper_matches: any[]; lower_matches: any[]; grand_final: any; lower_final: any } | null>(null)
   const [matches, setMatches] = useState<any[]>([])
   const [bracketQualifications, setBracketQualifications] = useState<any[]>([])
+  const [dailyStandings, setDailyStandings] = useState<any[]>([])
+  const [selectedDate, setSelectedDate] = useState<string>('')
   const [showCreateGroup, setShowCreateGroup] = useState(false)
   const [newGroupName, setNewGroupName] = useState('')
   const [creatingGroup, setCreatingGroup] = useState(false)
@@ -44,24 +46,52 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
     try {
       const data = await adminGetTournament(token, tournamentId)
       setTournament(data)
-      const [g, s, st, k, bq] = await Promise.all([
+      const [g, s, st, k, bq, m] = await Promise.all([
         adminGetGroups(token, tournamentId),
         adminGetSchedule(token, tournamentId),
         adminGetStandings(token, tournamentId),
         adminGetKnockout(token, tournamentId),
         adminGetBracketQualifications(token, tournamentId),
+        adminGetSchedule(token, tournamentId),
       ])
       setGroups(g)
       setSchedule(s)
       setStandings(st)
       setKnockout(k)
       setBracketQualifications(bq)
-      const m = await adminGetSchedule(token, tournamentId)
       setMatches(m)
+      // Load daily standings for the first available date
+      const dates = Array.from(new Set(m.map((match: any) => match.scheduled_date).filter(Boolean)))
+      if (dates.length > 0) {
+        const firstDate = dates[0]
+        setSelectedDate(firstDate)
+        try {
+          const daily = await adminGetDailyStandings(token, tournamentId, firstDate)
+          setDailyStandings(daily.standings || [])
+        } catch {
+          // ignore daily standings load error
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Gagal memuat data')
     }
   }
+
+  const loadDailyStandings = async (date: string) => {
+    if (!token) return
+    try {
+      const daily = await adminGetDailyStandings(token, tournamentId, date)
+      setDailyStandings(daily.standings || [])
+    } catch {
+      setDailyStandings([])
+    }
+  }
+
+  useEffect(() => {
+    if (selectedDate) {
+      loadDailyStandings(selectedDate)
+    }
+  }, [selectedDate, token, tournamentId])
 
   useEffect(() => {
     load()
@@ -629,27 +659,6 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
 
       {activeTab === 'standings' && (
         <div className="space-y-4">
-          <div className="flex flex-wrap gap-2">
-            <button onClick={handleRecalculateStandings} className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500">
-              Hitung Ulang Klasemen
-            </button>
-            <button
-              onClick={async () => {
-                if (!token) return
-                if (!confirm('Hapus semua kualifikasi bracket?')) return
-                try {
-                  await adminClearBracketQualifications(token, tournamentId)
-                  setBracketQualifications([])
-                  setMessage('Kualifikasi bracket dihapus')
-                } catch (err) {
-                  alert(err instanceof Error ? err.message : 'Gagal menghapus kualifikasi bracket')
-                }
-              }}
-              className="rounded-xl border border-white/10 px-4 py-2 text-sm font-medium text-gray-300 hover:text-white"
-            >
-              Reset Kualifikasi Bracket
-            </button>
-          </div>
           {standings.map((group) => (
             <Card key={group.group_id}>
               <h3 className="mb-3 text-lg font-semibold text-white">{group.group_name}</h3>
@@ -730,6 +739,59 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
               </div>
             </Card>
           ))}
+          {/* Daily Standings */}
+          <Card>
+            <h3 className="mb-3 text-lg font-semibold text-white">Klasemen Harian</h3>
+            <div className="mb-3 flex items-center gap-2">
+              <label className="text-xs text-gray-400">Tanggal:</label>
+              <select
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
+              >
+                <option value="">- Pilih Tanggal -</option>
+                {Array.from(new Set(schedule.map((m: any) => m.scheduled_date).filter(Boolean))).sort().map((date: string) => (
+                  <option key={date} value={date}>{date}</option>
+                ))}
+              </select>
+            </div>
+            {dailyStandings.length === 0 ? (
+              <p className="text-sm text-gray-400">Belum ada data klasemen harian untuk tanggal ini.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-white/10 text-left text-xs text-gray-400">
+                      <th className="pb-2 pr-4">#</th>
+                      <th className="pb-2 pr-4">Tim</th>
+                      <th className="pb-2 pr-4">P</th>
+                      <th className="pb-2 pr-4">W</th>
+                      <th className="pb-2 pr-4">L</th>
+                      <th className="pb-2 pr-4">K</th>
+                      <th className="pb-2 pr-4">D</th>
+                      <th className="pb-2 pr-4">KD</th>
+                      <th className="pb-2">Pts</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dailyStandings.map((s: any, idx: number) => (
+                      <tr key={s.team_id} className="border-b border-white/5">
+                        <td className="py-2 pr-4 text-gray-300">{idx + 1}</td>
+                        <td className="py-2 pr-4 text-white">{s.team_name || s.team_id}</td>
+                        <td className="py-2 pr-4 text-gray-300">{s.played}</td>
+                        <td className="py-2 pr-4 text-green-400">{s.win}</td>
+                        <td className="py-2 pr-4 text-red-400">{s.loss}</td>
+                        <td className="py-2 pr-4 text-gray-300">{s.kill}</td>
+                        <td className="py-2 pr-4 text-gray-300">{s.death}</td>
+                        <td className="py-2 pr-4 text-gray-300">{s.kill_difference > 0 ? '+' : ''}{s.kill_difference}</td>
+                        <td className="py-2 font-semibold text-white">{s.points}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Card>
         </div>
       )}
 

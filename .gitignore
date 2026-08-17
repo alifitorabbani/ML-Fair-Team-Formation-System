@@ -57,3 +57,4 @@ backend/uploads/*
 !.env.example
 .vercel
 .env*.local
+frontend/tsconfig.tsbuildinfo

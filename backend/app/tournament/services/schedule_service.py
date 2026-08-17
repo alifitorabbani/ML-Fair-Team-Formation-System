@@ -71,14 +71,20 @@ class ScheduleService:
         if effective_bo not in [e.value for e in BOFormat]:
             effective_bo = BOFormat.BO1.value
         existing_matches = await self.match_repo.get_by_tournament(tournament_id)
+        # Only delete group stage matches, preserve bracket matches
         for m in existing_matches:
-            await self.match_repo.delete(m.id)
+            if m.stage == MatchStage.GROUP_STAGE:
+                await self.match_repo.delete(m.id)
         team_list = [t.team_id for t in teams]
         random.seed(None)
         random.shuffle(team_list)
         matches_to_schedule = []
         for i in range(0, len(team_list) - 1, 2):
             matches_to_schedule.append((team_list[i], team_list[i + 1]))
+        # Include bracket matches if they exist
+        bracket_matches = [m for m in existing_matches if m.stage == MatchStage.KNOCKOUT]
+        if bracket_matches:
+            matches_to_schedule.extend([(m.team_a_id, m.team_b_id) for m in bracket_matches if m.team_a_id and m.team_b_id])
         slots = []
         for date_obj in dates:
             if start_date and date_obj.date < start_date:

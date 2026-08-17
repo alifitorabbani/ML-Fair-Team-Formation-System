@@ -62,6 +62,9 @@ function BracketMatchCard({ match, index, isFinal, isGrandFinal, token, tourname
   const [mapResults, setMapResults] = useState<Record<number, { team_a_wins: number; team_b_wins: number; maps: any[] }>>({})
   const [submitting, setSubmitting] = useState(false)
   const [advancing, setAdvancing] = useState(false)
+  const [selectedWinner, setSelectedWinner] = useState<string>('')
+  const [selectedLoser, setSelectedLoser] = useState<string>('')
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     const timer = setTimeout(() => setAnimated(true), index * 100)
@@ -127,7 +130,6 @@ function BracketMatchCard({ match, index, isFinal, isGrandFinal, token, tourname
       const teamBWinCount = updatedResults.filter(r => r.winner_team_id === match.team_b_id).length
       const overallScoreA = teamAWinCount
       const overallScoreB = teamBWinCount
-      const isComplete = teamAWinCount >= requiredWins || teamBWinCount >= requiredWins
       await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/matches/${encodeURIComponent(match.id)}/result`, {
         method: 'POST',
         headers: {
@@ -143,6 +145,70 @@ function BracketMatchCard({ match, index, isFinal, isGrandFinal, token, tourname
       if (onMatchUpdate) onMatchUpdate()
     } catch (err) {
       console.error('Failed to submit map result:', err)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleSubmitBracketResult = async () => {
+    if (!token || submitting) return
+    if (!selectedWinner || !selectedLoser) {
+      setError('Pilih Winner dan Loser')
+      return
+    }
+    if (selectedWinner === selectedLoser) {
+      setError('Winner dan Loser tidak boleh sama')
+      return
+    }
+    if (selectedWinner !== match.team_a_id && selectedWinner !== match.team_b_id) {
+      setError('Winner harus salah satu peserta match')
+      return
+    }
+    if (selectedLoser !== match.team_a_id && selectedLoser !== match.team_b_id) {
+      setError('Loser harus salah satu peserta match')
+      return
+    }
+    const allMaps = Object.values(mapResults).flatMap(m => m.maps)
+    const teamAWinCount = allMaps.filter(r => r.winner_team_id === match.team_a_id).length
+    const teamBWinCount = allMaps.filter(r => r.winner_team_id === match.team_b_id).length
+    const requiredWinsForFormat = getRequiredWins(match.format)
+    if (selectedWinner === match.team_a_id && teamAWinCount !== requiredWinsForFormat) {
+      setError(`Breakdown menunjukkan ${teamAWinCount} kemenangan untuk tim A, tapi memerlukan ${requiredWinsForFormat} kemenangan untuk menjadi winner`)
+      return
+    }
+    if (selectedWinner === match.team_b_id && teamBWinCount !== requiredWinsForFormat) {
+      setError(`Breakdown menunjukkan ${teamBWinCount} kemenangan untuk tim B, tapi memerlukan ${requiredWinsForFormat} kemenangan untuk menjadi winner`)
+      return
+    }
+    setSubmitting(true)
+    setError(null)
+    try {
+      const scoreA = selectedWinner === match.team_a_id ? requiredWinsForFormat : teamAWinCount
+      const scoreB = selectedWinner === match.team_b_id ? requiredWinsForFormat : teamBWinCount
+      const mapResultsPayload = allMaps.map((m, idx) => ({
+        map_number: idx + 1,
+        team_a_id: match.team_a_id,
+        team_b_id: match.team_b_id,
+        winner_team_id: m.winner_team_id,
+        status: 'COMPLETED',
+      }))
+      await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/matches/${encodeURIComponent(match.id)}/result`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-Token': token,
+        },
+        body: JSON.stringify({
+          score_a: scoreA,
+          score_b: scoreB,
+          winner_team_id: selectedWinner,
+          loser_team_id: selectedLoser,
+          map_results: mapResultsPayload,
+        }),
+      })
+      if (onMatchUpdate) onMatchUpdate()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Gagal menyimpan hasil')
     } finally {
       setSubmitting(false)
     }
@@ -219,6 +285,44 @@ function BracketMatchCard({ match, index, isFinal, isGrandFinal, token, tourname
               {advancing ? 'Advancing...' : 'Advance Winner'}
             </button>
           )}
+        </div>
+      )}
+      {match.status !== 'COMPLETED' && match.team_a_id && match.team_b_id && (
+        <div className="mt-3 space-y-2">
+          <div className="grid gap-2 md:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs text-gray-400">Winner</label>
+              <select
+                value={selectedWinner}
+                onChange={(e) => { setSelectedWinner(e.target.value); setError(null) }}
+                className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
+              >
+                <option value="">- Pilih Winner -</option>
+                <option value={match.team_a_id}>{match.team_a_id}</option>
+                <option value={match.team_b_id}>{match.team_b_id}</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-xs text-gray-400">Loser</label>
+              <select
+                value={selectedLoser}
+                onChange={(e) => { setSelectedLoser(e.target.value); setError(null) }}
+                className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
+              >
+                <option value="">- Pilih Loser -</option>
+                <option value={match.team_a_id}>{match.team_a_id}</option>
+                <option value={match.team_b_id}>{match.team_b_id}</option>
+              </select>
+            </div>
+          </div>
+          {error && <p className="text-xs text-red-400">{error}</p>}
+          <button
+            onClick={handleSubmitBracketResult}
+            disabled={submitting}
+            className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500 disabled:opacity-50"
+          >
+            {submitting ? 'Menyimpan...' : 'Simpan Hasil Bracket'}
+          </button>
         </div>
       )}
     </div>
