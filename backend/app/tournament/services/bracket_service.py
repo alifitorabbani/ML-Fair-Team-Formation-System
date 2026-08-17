@@ -43,21 +43,23 @@ class BracketService:
         self.placement_repo = TournamentPlacementRepository(db)
         self.result_version_repo = MatchResultVersionRepository(db)
 
-    async def generate_bracket(self, tournament_id: str, bracket_type: str, qualified_teams: List[str], seeding: Optional[List[str]] = None) -> KnockoutBracket:
+    async def generate_bracket(self, tournament_id: str, bracket_type: str, qualified_teams: List[str], seeding: Optional[List[str]] = None, populate_matches: bool = False) -> KnockoutBracket:
         tournament = await self.tournament_repo.get_by_id(tournament_id)
         if not tournament:
             raise ValueError("Tournament not found")
-        if tournament.status not in [TournamentStatus.GROUP_FINALIZED, TournamentStatus.KNOCKOUT, TournamentStatus.FINAL, TournamentStatus.TEAMS_LOCKED, TournamentStatus.GROUPS_CONFIGURED]:
-            raise ValueError(f"Cannot generate bracket in status {tournament.status}")
         if len(qualified_teams) < 2:
             raise ValueError("At least 2 qualified teams required")
         await self.bracket_repo.delete_by_tournament(tournament_id)
         if seeding:
             ordered = [t for t in seeding if t in qualified_teams]
-            remaining = [t for t in qualified_teams if t not in ordered]
+            remaining = [t for t in qualified_teams if t not in seeding]
             ordered.extend(remaining)
         else:
             ordered = list(qualified_teams)
+        if bracket_type == BracketType.UPPER and len(ordered) == 4:
+            ordered = [ordered[0], ordered[3], ordered[1], ordered[2]]
+        elif bracket_type == BracketType.LOWER and len(ordered) == 4:
+            ordered = [ordered[0], ordered[3], ordered[1], ordered[2]]
         bracket = await self.bracket_repo.create(
             {
                 "tournament_id": tournament_id,
@@ -87,7 +89,7 @@ class BracketService:
                         "status": "EMPTY",
                     }
                 )
-        if num_teams >= 2 and num_rounds > 0:
+        if populate_matches and num_teams >= 2 and num_rounds > 0:
             rounds = await self.round_repo.get_by_bracket(bracket.id)
             first_round = rounds[0]
             slots = await self.slot_repo.get_by_round(first_round.id)

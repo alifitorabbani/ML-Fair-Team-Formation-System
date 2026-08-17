@@ -766,11 +766,17 @@ async def generate_knockout(tournament_id: str, data: Dict[str, Any] = None, x_u
         raise HTTPException(status_code=400, detail="Request body is required")
     bracket_type = data.get("bracket_type", "UPPER")
     qualified_team_ids = data.get("qualified_team_ids", [])
+    populate_matches = data.get("populate_matches", False)
     if not qualified_team_ids:
         raise HTTPException(status_code=400, detail="qualified_team_ids is required")
     bracket_service = BracketService(db)
     try:
-        bracket = await bracket_service.generate_bracket(tournament_id, bracket_type, qualified_team_ids)
+        bracket = await bracket_service.generate_bracket(
+            tournament_id,
+            bracket_type,
+            qualified_team_ids,
+            populate_matches=populate_matches,
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {

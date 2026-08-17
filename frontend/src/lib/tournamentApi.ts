@@ -318,14 +318,14 @@ export async function adminRecalculateStandings(token: string, tournamentId: str
   return response.json()
 }
 
-export async function adminGenerateKnockout(token: string, tournamentId: string, bracketType: string, qualifiedTeamIds: string[]): Promise<any> {
+export async function adminGenerateKnockout(token: string, tournamentId: string, bracketType: string, qualifiedTeamIds: string[], populateMatches: boolean = false): Promise<any> {
   const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/knockout/generate?bracket_type=${encodeURIComponent(bracketType)}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'X-User-Token': token,
     },
-    body: JSON.stringify({ qualified_team_ids: qualifiedTeamIds }),
+    body: JSON.stringify({ qualified_team_ids: qualifiedTeamIds, populate_matches: populateMatches }),
   })
   if (!response.ok) {
     const error = await response.json()
