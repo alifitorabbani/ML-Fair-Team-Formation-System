@@ -51,6 +51,7 @@ class StandingsService:
                         loss += 1
             kill_difference = kill - death
             points = win * 2
+            win_rate = (win / played) * 100 if played > 0 else 0.0
             standing = await self.standing_repo.create_or_update(
                 {
                     "group_id": group_id,
@@ -74,6 +75,7 @@ class StandingsService:
                     "death": standing.death,
                     "kill_difference": standing.kill_difference,
                     "points": standing.points,
+                    "win_rate": win_rate,
                     "rank": standing.rank,
                 }
             )
@@ -111,6 +113,7 @@ class StandingsService:
                     "death": standing.death,
                     "kill_difference": standing.kill_difference,
                     "points": standing.points,
+                    "win_rate": (standing.win / standing.played) * 100 if standing.played > 0 else 0.0,
                     "is_manual_override": standing.is_manual_override,
                 }
             )

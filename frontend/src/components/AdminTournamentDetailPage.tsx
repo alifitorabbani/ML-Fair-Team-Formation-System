@@ -518,23 +518,28 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
                       <th className="pb-2 pr-4">K</th>
                       <th className="pb-2 pr-4">D</th>
                       <th className="pb-2 pr-4">KD</th>
+                      <th className="pb-2 pr-4">WR</th>
                       <th className="pb-2">Pts</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {group.standings.map((s: any) => (
-                      <tr key={s.team_id} className="border-b border-white/5">
-                        <td className="py-2 pr-4 text-gray-300">{s.rank || '-'}</td>
-                        <td className="py-2 pr-4 text-white">{s.team_name || s.team_id}</td>
-                        <td className="py-2 pr-4 text-gray-300">{s.played}</td>
-                        <td className="py-2 pr-4 text-green-400">{s.win}</td>
-                        <td className="py-2 pr-4 text-red-400">{s.loss}</td>
-                        <td className="py-2 pr-4 text-gray-300">{s.kill}</td>
-                        <td className="py-2 pr-4 text-gray-300">{s.death}</td>
-                        <td className="py-2 pr-4 text-gray-300">{s.kill_difference > 0 ? '+' : ''}{s.kill_difference}</td>
-                        <td className="py-2 font-semibold text-white">{s.points}</td>
-                      </tr>
-                    ))}
+                    {group.standings.map((s: any) => {
+                      const winRate = s.played > 0 ? ((s.win / s.played) * 100).toFixed(1) : '0.0'
+                      return (
+                        <tr key={s.team_id} className="border-b border-white/5">
+                          <td className="py-2 pr-4 text-gray-300">{s.rank || '-'}</td>
+                          <td className="py-2 pr-4 text-white">{s.team_name || s.team_id}</td>
+                          <td className="py-2 pr-4 text-gray-300">{s.played}</td>
+                          <td className="py-2 pr-4 text-green-400">{s.win}</td>
+                          <td className="py-2 pr-4 text-red-400">{s.loss}</td>
+                          <td className="py-2 pr-4 text-gray-300">{s.kill}</td>
+                          <td className="py-2 pr-4 text-gray-300">{s.death}</td>
+                          <td className="py-2 pr-4 text-gray-300">{s.kill_difference > 0 ? '+' : ''}{s.kill_difference}</td>
+                          <td className="py-2 pr-4 text-gray-300">{winRate}%</td>
+                          <td className="py-2 font-semibold text-white">{s.points}</td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
