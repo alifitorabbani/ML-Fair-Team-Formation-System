@@ -37,18 +37,7 @@ from app.tournament.repositories import (
     TournamentPlacementRepository,
 )
 from app.tournament.services.match_service import MatchService
-from app.tournament.schemas.tournament_schemas import (
-    TournamentCreate,
-    TournamentUpdate,
-    TournamentTeamSelect,
-    TournamentGroupCreate,
-    TournamentGroupUpdate,
-    MatchCreate,
-    MatchUpdate,
-    StandingsOverride,
-    PlacementSet,
-    ScheduleGenerateResponse,
-)
+from app.tournament.services.bracket_service import BracketService
 from app.tournament.schemas.tournament_schemas import (
     TournamentCreate,
     TournamentUpdate,
@@ -92,6 +81,7 @@ class TournamentService:
         self.slot_repo = KnockoutSlotRepository(db)
         self.schedule_version_repo = ScheduleVersionRepository(db)
         self.placement_repo = TournamentPlacementRepository(db)
+        self.bracket_service = BracketService(db)
 
     async def create_tournament(self, data: TournamentCreate, created_by: Optional[str] = None) -> Tournament:
         tournament = await self.tournament_repo.create(
@@ -378,8 +368,10 @@ class TournamentService:
             await self._recalculate_group_standings(tournament_id, match.group_id)
             if match.scheduled_date:
                 await self._recalculate_daily_standings(tournament_id, match.group_id, match.scheduled_date.isoformat())
-        elif match.stage == MatchStage.KNOCKOUT and match.bracket_id:
-            await self._recalculate_group_standings(tournament_id, match.group_id) if match.group_id else None
+        elif match.stage == MatchStage.KNOCKOUT:
+            await self.bracket_service.recalculate_bracket_standings(tournament_id)
+            if match.bracket_id:
+                await self._recalculate_group_standings(tournament_id, match.group_id) if match.group_id else None
         return match
 
     async def confirm_match_result(self, tournament_id: str, match_id: str) -> Optional[Match]:

@@ -10,6 +10,7 @@ from app.tournament.models.tournament_models import (
     KnockoutSlot,
     Match,
     TournamentPlacement,
+    BracketStanding,
 )
 from app.tournament.repositories import (
     TournamentRepository,
@@ -19,6 +20,7 @@ from app.tournament.repositories import (
     MatchRepository,
     TournamentPlacementRepository,
     MatchResultVersionRepository,
+    BracketStandingRepository,
 )
 from app.tournament.constants import (
     TournamentStatus,
@@ -171,6 +173,7 @@ class BracketService:
         self.match_repo = MatchRepository(db)
         self.placement_repo = TournamentPlacementRepository(db)
         self.result_version_repo = MatchResultVersionRepository(db)
+        self.bracket_standing_repo = BracketStandingRepository(db)
 
     async def generate_bracket(self, tournament_id: str, qualified_teams: List[str], seeding: Optional[List[str]] = None, populate_matches: bool = True) -> Dict[str, Any]:
         """Generate exact 8-team double elimination bracket."""
@@ -677,3 +680,44 @@ class BracketService:
         elif placement is not None:
             return f"PLACED_{placement}"
         return "ACTIVE"
+
+    async def recalculate_bracket_standings(self, tournament_id: str):
+        """Recalculate bracket points for all teams in the tournament."""
+        # Get all completed knockout matches
+        matches = await self.match_repo.get_by_tournament(tournament_id, MatchStage.KNOCKOUT)
+        completed_matches = [m for m in matches if m.status == MatchStatus.COMPLETED and m.winner_team_id]
+        
+        # Get all teams that participated in bracket
+        team_ids = set()
+        for m in matches:
+            if m.team_a_id:
+                team_ids.add(m.team_a_id)
+            if m.team_b_id:
+                team_ids.add(m.team_b_id)
+        
+        # Calculate bracket points
+        bracket_points = {}
+        for team_id in team_ids:
+            bracket_points[team_id] = {"points": 0, "wins": 0, "losses": 0}
+        
+        for match in completed_matches:
+            if not match.winner_team_id:
+                continue
+            winner_id = match.winner_team_id
+            loser_id = match.team_a_id if match.team_b_id == winner_id else match.team_b_id
+            
+            if winner_id in bracket_points:
+                bracket_points[winner_id]["points"] += 1
+                bracket_points[winner_id]["wins"] += 1
+            if loser_id in bracket_points:
+                bracket_points[loser_id]["losses"] += 1
+        
+        # Save to database
+        for team_id, stats in bracket_points.items():
+            await self.bracket_standing_repo.create_or_update({
+                "tournament_id": tournament_id,
+                "team_id": team_id,
+                "points": stats["points"],
+                "wins": stats["wins"],
+                "losses": stats["losses"],
+            })

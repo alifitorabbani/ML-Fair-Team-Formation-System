@@ -346,6 +346,24 @@ class TournamentPlacement(Base):
     )
 
 
+class BracketStanding(Base):
+    __tablename__ = "bracket_standings"
+
+    id = Column(String, primary_key=True, default=uuid_str, index=True)
+    tournament_id = Column(String, ForeignKey("tournaments.id", ondelete="CASCADE"), nullable=False, index=True)
+    team_id = Column(String, nullable=False, index=True)
+    points = Column(Integer, nullable=False, default=0)
+    wins = Column(Integer, nullable=False, default=0)
+    losses = Column(Integer, nullable=False, default=0)
+    computed_at = Column(DateTime, default=datetime.utcnow)
+
+    tournament = relationship("Tournament")
+
+    __table_args__ = (
+        UniqueConstraint("tournament_id", "team_id", name="uq_bracket_team_standing"),
+    )
+
+
 class BracketQualification(Base):
     __tablename__ = "bracket_qualifications"
 

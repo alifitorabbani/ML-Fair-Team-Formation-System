@@ -14,6 +14,7 @@ from app.tournament.repositories.placement_repository import TournamentPlacement
 from app.tournament.repositories.bracket_qualification_repository import BracketQualificationRepository
 from app.tournament.repositories.bracket_match_map_repository import BracketMatchMapRepository
 from app.tournament.repositories.daily_standing_repository import DailyStandingRepository
+from app.tournament.repositories.bracket_standing_repository import BracketStandingRepository
 
 __all__ = [
     "TournamentRepository",
@@ -32,4 +33,5 @@ __all__ = [
     "BracketQualificationRepository",
     "BracketMatchMapRepository",
     "DailyStandingRepository",
+    "BracketStandingRepository",
 ]
