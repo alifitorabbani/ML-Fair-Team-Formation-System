@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { adminGetTournament, adminUpdateTournament, adminSelectTeams, adminGetTournamentTeams, adminGetAvailableTeams, adminCreateGroup, adminUpdateGroup, adminGetGroups, adminGenerateSchedule, adminGetSchedule, adminGetStandings, adminRecalculateStandings, adminOverrideStandings, adminCreateMatch, adminUpdateMatch, adminDeleteMatch, adminSubmitMatchResult, adminConfirmMatchResult, adminGenerateKnockout, adminGetKnockout, adminAdvanceKnockout, adminSetPlacement, adminFinalizeChampion } from '@/lib/tournamentApi'
+import { adminGetTournament, adminUpdateTournament, adminGetTournamentTeams, adminGetAvailableTeams, adminCreateGroup, adminUpdateGroup, adminGetGroups, adminGenerateSchedule, adminGetSchedule, adminGetStandings, adminRecalculateStandings, adminOverrideStandings, adminCreateMatch, adminUpdateMatch, adminDeleteMatch, adminSubmitMatchResult, adminConfirmMatchResult, adminGenerateKnockout, adminGetKnockout, adminAdvanceKnockout, adminSetPlacement, adminFinalizeChampion } from '@/lib/tournamentApi'
 import { useAuthToken } from '@/lib/hooks/useAuth'
 import { TournamentResponse } from '@/types'
 import LoadingSpinner from '@/components/shared/LoadingSpinner'
@@ -23,6 +23,10 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
   const [standings, setStandings] = useState<any[]>([])
   const [knockout, setKnockout] = useState<any[]>([])
   const [matches, setMatches] = useState<any[]>([])
+  const [showCreateGroup, setShowCreateGroup] = useState(false)
+  const [newGroupName, setNewGroupName] = useState('')
+  const [creatingGroup, setCreatingGroup] = useState(false)
+  const [groupError, setGroupError] = useState<string | null>(null)
 
   const load = async () => {
     if (!token) return
@@ -92,6 +96,22 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
       setError(err instanceof Error ? err.message : 'Gagal menghitung ulang')
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleCreateGroup = async () => {
+    if (!token || !newGroupName.trim()) return
+    setCreatingGroup(true)
+    setGroupError(null)
+    try {
+      await adminCreateGroup(token, tournamentId, { name: newGroupName.trim(), team_ids: [] })
+      setNewGroupName('')
+      setShowCreateGroup(false)
+      load()
+    } catch (err) {
+      setGroupError(err instanceof Error ? err.message : 'Gagal membuat group')
+    } finally {
+      setCreatingGroup(false)
     }
   }
 
@@ -201,58 +221,54 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
         <div className="space-y-6">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-lg font-semibold text-white">Kelola Group</h3>
-            <div className="flex flex-wrap gap-2">
+            {!showCreateGroup && (
               <button
-                onClick={async () => {
-                  if (!token) return
-                  const allTeams = await adminGetTournamentTeams(token, tournamentId)
-                  const teamIds = allTeams.map((t: any) => t.team_id)
-                  const groupCount = Math.max(1, Math.ceil(teamIds.length / 4))
-                  await Promise.all(
-                    Array.from({ length: groupCount }).map((_, idx) =>
-                      adminCreateGroup(token, tournamentId, { name: `Group ${String.fromCharCode(65 + idx)}`, team_ids: [] })
-                    )
-                  )
-                  load()
-                }}
+                onClick={() => setShowCreateGroup(true)}
                 className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500"
               >
-                Auto-Buat Group
+                + Buat Group
               </button>
-              <button
-                onClick={async () => {
-                  if (!token) return
-                  const allTeams = await adminGetTournamentTeams(token, tournamentId)
-                  const available = await adminGetAvailableTeams(token, tournamentId)
-                  const teamIds = allTeams.map((t: any) => t.team_id)
-                  const groupCount = Math.max(1, Math.ceil(teamIds.length / 4))
-                  await Promise.all(
-                    Array.from({ length: groupCount }).map((_, idx) =>
-                      adminCreateGroup(token, tournamentId, { name: `Group ${String.fromCharCode(65 + idx)}`, team_ids: [] })
-                    )
-                  )
-                  const newGroups = await adminGetGroups(token, tournamentId)
-                  for (let g = 0; g < newGroups.length; g++) {
-                    const group = newGroups[g]
-                    const start = Math.floor(g * teamIds.length / groupCount)
-                    const end = Math.floor((g + 1) * teamIds.length / groupCount)
-                    const groupTeamIds = teamIds.slice(start, end)
-                    if (groupTeamIds.length > 0) {
-                      await adminUpdateGroup(token, tournamentId, group.id, { team_ids: groupTeamIds })
-                    }
-                  }
-                  load()
-                }}
-                className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500"
-              >
-                Auto-Isi Group
-              </button>
-            </div>
+            )}
           </div>
+
+          {showCreateGroup && (
+            <Card>
+              <div className="space-y-4">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-gray-300">Nama Group</label>
+                  <input
+                    type="text"
+                    value={newGroupName}
+                    onChange={(e) => setNewGroupName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleCreateGroup()}
+                    className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-4 py-2 text-sm text-white placeholder-gray-500 focus:border-brand-500 focus:outline-none"
+                    placeholder="Contoh: Group A"
+                    autoFocus
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleCreateGroup}
+                    disabled={creatingGroup || !newGroupName.trim()}
+                    className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500 disabled:opacity-50"
+                  >
+                    {creatingGroup ? 'Menyimpan...' : 'Buat Group'}
+                  </button>
+                  <button
+                    onClick={() => { setShowCreateGroup(false); setNewGroupName('') }}
+                    className="rounded-xl border border-white/10 px-4 py-2 text-sm text-gray-400 hover:text-white"
+                  >
+                    Batal
+                  </button>
+                </div>
+                {groupError && <p className="text-xs text-red-400">{groupError}</p>}
+              </div>
+            </Card>
+          )}
 
           {groups.length === 0 ? (
             <Card>
-              <p className="text-sm text-gray-400">Belum ada group. Klik "Auto-Buat Group" untuk membuat group berdasarkan jumlah tim.</p>
+              <p className="text-sm text-gray-400">Belum ada group. Klik "Buat Group" untuk membuat group baru.</p>
             </Card>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
