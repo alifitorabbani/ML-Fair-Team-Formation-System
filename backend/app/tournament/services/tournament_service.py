@@ -210,7 +210,6 @@ class TournamentService:
             raise ValueError("Tournament not found")
         if not can_transition(tournament.status, TournamentStatus.GROUPS_CONFIGURED):
             raise ValueError(f"Cannot create groups in status {tournament.status}")
-        await self.group_repo.delete_by_tournament(tournament_id)
         group = await self.group_repo.create(
             {
                 "tournament_id": tournament_id,
@@ -229,10 +228,11 @@ class TournamentService:
                     "seed": idx + 1,
                 }
             )
-        tournament.status = TournamentStatus.GROUPS_CONFIGURED
-        tournament.updated_at = datetime.utcnow()
-        await self.db.flush()
-        await self.db.refresh(tournament)
+        if tournament.status != TournamentStatus.GROUPS_CONFIGURED:
+            tournament.status = TournamentStatus.GROUPS_CONFIGURED
+            tournament.updated_at = datetime.utcnow()
+            await self.db.flush()
+            await self.db.refresh(tournament)
         return group
 
     async def update_group(self, group_id: str, data: TournamentGroupUpdate) -> Optional[TournamentGroup]:
