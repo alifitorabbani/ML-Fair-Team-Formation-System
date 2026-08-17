@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { adminGetTournament, adminUpdateTournament, adminSelectTeams, adminCreateGroup, adminUpdateGroup, adminGetGroups, adminGenerateSchedule, adminGetSchedule, adminGetStandings, adminRecalculateStandings, adminOverrideStandings, adminCreateMatch, adminUpdateMatch, adminDeleteMatch, adminSubmitMatchResult, adminConfirmMatchResult, adminGenerateKnockout, adminGetKnockout, adminAdvanceKnockout, adminSetPlacement, adminFinalizeChampion } from '@/lib/tournamentApi'
+import { adminGetTournament, adminUpdateTournament, adminSelectTeams, adminGetTournamentTeams, adminGetAvailableTeams, adminCreateGroup, adminUpdateGroup, adminGetGroups, adminGenerateSchedule, adminGetSchedule, adminGetStandings, adminRecalculateStandings, adminOverrideStandings, adminCreateMatch, adminUpdateMatch, adminDeleteMatch, adminSubmitMatchResult, adminConfirmMatchResult, adminGenerateKnockout, adminGetKnockout, adminAdvanceKnockout, adminSetPlacement, adminFinalizeChampion } from '@/lib/tournamentApi'
 import { useAuthToken } from '@/lib/hooks/useAuth'
 import { TournamentResponse } from '@/types'
 import LoadingSpinner from '@/components/shared/LoadingSpinner'
@@ -188,40 +188,72 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
       )}
 
       {activeTab === 'groups' && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-white">Groups</h3>
-            <CreateGroupForm
-              token={token}
-              tournamentId={tournamentId}
-              onCreated={load}
-            />
+        <div className="space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-lg font-semibold text-white">Kelola Group</h3>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={async () => {
+                  if (!token) return
+                  const allTeams = await adminGetTournamentTeams(token, tournamentId)
+                  const teamIds = allTeams.map((t: any) => t.team_id)
+                  const groupCount = Math.max(1, Math.ceil(teamIds.length / 4))
+                  await Promise.all(
+                    Array.from({ length: groupCount }).map((_, idx) =>
+                      adminCreateGroup(token, tournamentId, { name: `Group ${String.fromCharCode(65 + idx)}`, team_ids: [] })
+                    )
+                  )
+                  load()
+                }}
+                className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500"
+              >
+                Auto-Buat Group
+              </button>
+              <button
+                onClick={async () => {
+                  if (!token) return
+                  const allTeams = await adminGetTournamentTeams(token, tournamentId)
+                  const available = await adminGetAvailableTeams(token, tournamentId)
+                  const teamIds = allTeams.map((t: any) => t.team_id)
+                  const groupCount = Math.max(1, Math.ceil(teamIds.length / 4))
+                  await Promise.all(
+                    Array.from({ length: groupCount }).map((_, idx) =>
+                      adminCreateGroup(token, tournamentId, { name: `Group ${String.fromCharCode(65 + idx)}`, team_ids: [] })
+                    )
+                  )
+                  const newGroups = await adminGetGroups(token, tournamentId)
+                  for (let g = 0; g < newGroups.length; g++) {
+                    const group = newGroups[g]
+                    const start = Math.floor(g * teamIds.length / groupCount)
+                    const end = Math.floor((g + 1) * teamIds.length / groupCount)
+                    const groupTeamIds = teamIds.slice(start, end)
+                    if (groupTeamIds.length > 0) {
+                      await adminUpdateGroup(token, tournamentId, group.id, { team_ids: groupTeamIds })
+                    }
+                  }
+                  load()
+                }}
+                className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500"
+              >
+                Auto-Isi Group
+              </button>
+            </div>
           </div>
+
           {groups.length === 0 ? (
-            <Card><p className="text-sm text-gray-400">Belum ada group. Buat group untuk memulai.</p></Card>
+            <Card>
+              <p className="text-sm text-gray-400">Belum ada group. Klik "Auto-Buat Group" untuk membuat group berdasarkan jumlah tim.</p>
+            </Card>
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
               {groups.map((group: any) => (
-                <Card key={group.id}>
-                  <div className="mb-3 flex items-center justify-between">
-                    <h4 className="text-base font-semibold text-white">{group.name}</h4>
-                    <span className="text-xs text-gray-400">{group.members?.length || 0} tim</span>
-                  </div>
-                  <div className="space-y-2">
-                    {group.members?.length === 0 ? (
-                      <p className="text-xs text-gray-500">Belum ada tim.</p>
-                    ) : (
-                      group.members.map((m: any) => (
-                        <div key={m.id} className="flex items-center justify-between rounded-xl border border-white/5 bg-surface-900/40 px-3 py-2">
-                          <div>
-                            <div className="text-sm text-white">{m.team_name_snapshot || m.team_id}</div>
-                            <div className="text-xs text-gray-500">Seed: {m.seed || '-'}</div>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </Card>
+                <GroupCard
+                  key={group.id}
+                  token={token}
+                  tournamentId={tournamentId}
+                  group={group}
+                  onUpdated={load}
+                />
               ))}
             </div>
           )}
@@ -408,44 +440,133 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
   )
 }
 
-function CreateGroupForm({ token, tournamentId, onCreated }: { token: string | null; tournamentId: string; onCreated: () => void }) {
-  const [name, setName] = useState<string>('')
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+function GroupCard({ token, tournamentId, group, onUpdated }: { token: string | null; tournamentId: string; group: any; onUpdated: () => void }) {
+  const [editing, setEditing] = useState(false)
+  const [availableTeams, setAvailableTeams] = useState<any[]>([])
+  const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([])
+  const [saving, setSaving] = useState(false)
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!name.trim()) return
-    setSubmitting(true)
-    setError(null)
+  const loadAvailable = async () => {
+    if (!token) return
     try {
-      await adminCreateGroup(token || '', tournamentId, { name: name.trim(), team_ids: [] })
-      setName('')
-      onCreated()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Gagal membuat group')
-    } finally {
-      setSubmitting(false)
+      const teams = await adminGetAvailableTeams(token, tournamentId)
+      setAvailableTeams(teams)
+    } catch {
+      // ignore
     }
   }
 
+  useEffect(() => {
+    if (editing) {
+      loadAvailable()
+    }
+  }, [editing])
+
+  const handleSave = async () => {
+    if (!token) return
+    setSaving(true)
+    try {
+                      const currentIds = (group.members || []).map((m: any) => m.team_id).filter(Boolean)
+                      const newIds = Array.from(new Set([...currentIds, ...selectedTeamIds]))
+      await adminUpdateGroup(token, tournamentId, group.id, { team_ids: newIds })
+      setEditing(false)
+      onUpdated()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Gagal menyimpan group')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleRemove = async (teamId: string) => {
+    if (!token) return
+    const currentIds = (group.members || []).map((m: any) => m.team_id).filter(Boolean).filter((id: string) => id !== teamId)
+    try {
+      await adminUpdateGroup(token, tournamentId, group.id, { team_ids: currentIds })
+      onUpdated()
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Gagal menghapus tim dari group')
+    }
+  }
+
+  const assignedCount = group.members?.length || 0
+
   return (
-    <form onSubmit={handleSubmit} className="flex gap-2">
-      <input
-        type="text"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        placeholder="Nama group"
-        className="rounded-xl border border-white/10 bg-surface-900/60 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-brand-500 focus:outline-none"
-      />
-      <button
-        type="submit"
-        disabled={submitting || !name.trim()}
-        className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500 disabled:opacity-50"
-      >
-        {submitting ? 'Menyimpan...' : 'Buat Group'}
-      </button>
-      {error && <span className="text-xs text-red-400">{error}</span>}
-    </form>
+    <Card>
+      <div className="mb-3 flex items-center justify-between">
+        <div>
+          <h4 className="text-base font-semibold text-white">{group.name}</h4>
+          <p className="text-xs text-gray-400">{assignedCount} tim</p>
+        </div>
+        <button
+          onClick={() => setEditing(!editing)}
+          className="rounded-xl border border-white/10 px-3 py-1.5 text-xs font-medium text-gray-300 hover:text-white"
+        >
+          {editing ? 'Batal' : 'Edit'}
+        </button>
+      </div>
+
+      {!editing ? (
+        <div className="space-y-2">
+          {group.members?.length === 0 ? (
+            <p className="text-xs text-gray-500">Belum ada tim.</p>
+          ) : (
+            group.members.map((m: any) => (
+              <div key={m.id} className="flex items-center justify-between rounded-xl border border-white/5 bg-surface-900/40 px-3 py-2">
+                <div>
+                  <div className="text-sm text-white">{m.team_name_snapshot || m.team_id}</div>
+                  <div className="text-xs text-gray-500">Seed: {m.seed || '-'}</div>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-gray-300">Tersedia untuk ditambahkan:</p>
+            {availableTeams.length === 0 ? (
+              <p className="text-xs text-gray-500">Semua tim sudah masuk group.</p>
+            ) : (
+              <div className="max-h-40 space-y-1 overflow-y-auto">
+                {availableTeams.map((t: any) => (
+                  <label key={t.id} className="flex items-center gap-2 rounded-xl border border-white/5 bg-surface-900/40 px-3 py-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedTeamIds.includes(t.team_id)}
+                      onChange={(e) => {
+                        setSelectedTeamIds((prev) =>
+                          e.target.checked ? [...prev, t.team_id] : prev.filter((id) => id !== t.team_id)
+                        )
+                      }}
+                      className="h-4 w-4 rounded border-white/20 bg-surface-900/60 text-brand-500 focus:ring-brand-500"
+                    />
+                    <span className="text-sm text-white">{t.team_name_snapshot || t.team_id}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={handleSave}
+              disabled={saving || selectedTeamIds.length === 0}
+              className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500 disabled:opacity-50"
+            >
+              {saving ? 'Menyimpan...' : 'Tambah Tim'}
+            </button>
+            <button
+              onClick={() => {
+                setEditing(false)
+                setSelectedTeamIds([])
+              }}
+              className="rounded-xl border border-white/10 px-4 py-2 text-sm text-gray-400 hover:text-white"
+            >
+              Batal
+            </button>
+          </div>
+        </div>
+      )}
+    </Card>
   )
 }

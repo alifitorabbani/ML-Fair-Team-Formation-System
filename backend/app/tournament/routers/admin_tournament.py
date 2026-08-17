@@ -126,6 +126,51 @@ async def select_teams(tournament_id: str, data: TournamentTeamSelect, x_user_to
     )
 
 
+@router.get("/{tournament_id}/teams")
+async def list_tournament_teams(tournament_id: str, x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)):
+    _ = get_admin_user(x_user_token)
+    service = TournamentService(db)
+    teams = await service.team_repo.get_by_tournament(tournament_id)
+    return [
+        {
+            "id": t.id,
+            "tournament_id": t.tournament_id,
+            "team_version_id": t.team_version_id,
+            "team_id": t.team_id,
+            "team_name_snapshot": t.team_name_snapshot,
+            "seed": t.seed,
+        }
+        for t in teams
+    ]
+
+
+@router.get("/{tournament_id}/available-teams")
+async def list_available_teams(tournament_id: str, x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)):
+    _ = get_admin_user(x_user_token)
+    service = TournamentService(db)
+    all_teams = await service.team_repo.get_by_tournament(tournament_id)
+    groups = await service.group_repo.get_by_tournament(tournament_id)
+    assigned_team_ids = set()
+    for group in groups:
+        members = await service.group_member_repo.get_by_group(group.id)
+        for m in members:
+            if m.tournament_team and m.tournament_team.team_id:
+                assigned_team_ids.add(m.tournament_team.team_id)
+    available = [
+        {
+            "id": t.id,
+            "tournament_id": t.tournament_id,
+            "team_version_id": t.team_version_id,
+            "team_id": t.team_id,
+            "team_name_snapshot": t.team_name_snapshot,
+            "seed": t.seed,
+        }
+        for t in all_teams
+        if t.team_id not in assigned_team_ids
+    ]
+    return available
+
+
 @router.get("/{tournament_id}/groups")
 async def list_groups(tournament_id: str, x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)):
     _ = get_admin_user(x_user_token)

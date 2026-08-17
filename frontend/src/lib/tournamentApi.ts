@@ -93,6 +93,28 @@ export async function adminSelectTeams(token: string, tournamentId: string, team
   return response.json()
 }
 
+export async function adminGetTournamentTeams(token: string, tournamentId: string): Promise<any[]> {
+  const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/teams`, {
+    headers: { 'X-User-Token': token },
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to fetch tournament teams')
+  }
+  return response.json()
+}
+
+export async function adminGetAvailableTeams(token: string, tournamentId: string): Promise<any[]> {
+  const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/available-teams`, {
+    headers: { 'X-User-Token': token },
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to fetch available teams')
+  }
+  return response.json()
+}
+
 export async function adminCreateGroup(token: string, tournamentId: string, data: any): Promise<any> {
   const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/groups`, {
     method: 'POST',
