@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 import json
 
 from app.database import get_db
@@ -760,10 +760,14 @@ async def clear_bracket_qualifications(tournament_id: str, x_user_token: Optiona
 
 
 @router.post("/{tournament_id}/knockout/generate")
-async def generate_knockout(tournament_id: str, bracket_type: str = "UPPER", qualified_team_ids: Optional[List[str]] = None, x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)):
+async def generate_knockout(tournament_id: str, data: Dict[str, Any] = None, x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)):
     _ = get_admin_user(x_user_token)
+    if not data:
+        raise HTTPException(status_code=400, detail="Request body is required")
+    bracket_type = data.get("bracket_type", "UPPER")
+    qualified_team_ids = data.get("qualified_team_ids", [])
     if not qualified_team_ids:
-        raise HTTPException(status_code=400, detail="qualified_team_ids required")
+        raise HTTPException(status_code=400, detail="qualified_team_ids is required")
     bracket_service = BracketService(db)
     try:
         bracket = await bracket_service.generate_bracket(tournament_id, bracket_type, qualified_team_ids)

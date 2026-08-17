@@ -47,7 +47,7 @@ class BracketService:
         tournament = await self.tournament_repo.get_by_id(tournament_id)
         if not tournament:
             raise ValueError("Tournament not found")
-        if tournament.status not in [TournamentStatus.GROUP_FINALIZED, TournamentStatus.KNOCKOUT, TournamentStatus.FINAL]:
+        if tournament.status not in [TournamentStatus.GROUP_FINALIZED, TournamentStatus.KNOCKOUT, TournamentStatus.FINAL, TournamentStatus.TEAMS_LOCKED, TournamentStatus.GROUPS_CONFIGURED]:
             raise ValueError(f"Cannot generate bracket in status {tournament.status}")
         if len(qualified_teams) < 2:
             raise ValueError("At least 2 qualified teams required")
@@ -61,12 +61,14 @@ class BracketService:
         bracket = await self.bracket_repo.create(
             {
                 "tournament_id": tournament_id,
-                "name": bracket_type,
+                "name": f"{bracket_type} Bracket",
                 "bracket_type": bracket_type,
-                "sort_order": {"UPPER": 1, "MIDDLE": 2, "LOWER": 3}.get(bracket_type, 99),
+                "sort_order": {"UPPER": 1, "LOWER": 2}.get(bracket_type, 99),
             }
         )
         num_teams = len(ordered)
+        if num_teams < 2:
+            raise ValueError("At least 2 teams required to generate bracket")
         num_rounds = (num_teams - 1).bit_length()
         for round_num in range(1, num_rounds + 1):
             matches_in_round = max(1, num_teams // (2 ** round_num))
@@ -85,6 +87,38 @@ class BracketService:
                         "status": "EMPTY",
                     }
                 )
+        if num_teams >= 2 and num_rounds > 0:
+            rounds = await self.round_repo.get_by_bracket(bracket.id)
+            first_round = rounds[0]
+            slots = await self.slot_repo.get_by_round(first_round.id)
+            matches_to_create = []
+            for idx in range(0, num_teams - 1, 2):
+                team_a = ordered[idx]
+                team_b = ordered[idx + 1]
+                slot = slots[idx // 2] if idx // 2 < len(slots) else None
+                if slot:
+                    slot.team_id = None
+                    slot.status = "FILLED"
+                    await self.db.flush()
+                    bo_format = self._get_bo_format_for_match(bracket.bracket_type, first_round.round_number, rounds)
+                    match = await self.match_repo.create(
+                        {
+                            "tournament_id": tournament_id,
+                            "stage": MatchStage.KNOCKOUT,
+                            "bracket_id": bracket.id,
+                            "round": first_round.round_number,
+                            "match_number": slot.slot_number,
+                            "scheduled_date": datetime.utcnow().date(),
+                            "start_time": datetime.utcnow().time(),
+                            "end_time": datetime.utcnow().time(),
+                            "team_a_id": team_a,
+                            "team_b_id": team_b,
+                            "format": bo_format,
+                            "status": MatchStatus.SCHEDULED,
+                        }
+                    )
+                    await self.slot_repo.update(slot.id, {"next_match_id": match.id, "next_slot_number": slot.slot_number})
+                    matches_to_create.append(match)
         tournament.status = TournamentStatus.KNOCKOUT
         tournament.updated_at = datetime.utcnow()
         await self.db.flush()

@@ -702,18 +702,36 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
       {activeTab === 'knockout' && (
         <div className="space-y-6">
           <div className="flex flex-wrap gap-2">
-            <button
-              onClick={async () => {
-                if (!token) return
-                const qualified = matches.filter(m => m.status === 'COMPLETED').map(m => m.winner_team_id).filter(Boolean) as string[]
-                if (qualified.length === 0) return
-                await adminGenerateKnockout(token, tournamentId, 'UPPER', qualified)
+          <button
+            onClick={async () => {
+              if (!token) return
+              try {
+                const qualified = standings.flatMap((group: any) => 
+                  group.standings
+                    .filter((s: any) => s.rank <= 8)
+                    .map((s: any) => s.team_id)
+                )
+                if (qualified.length === 0) {
+                  alert('Tidak ada tim yang lolos kualifikasi')
+                  return
+                }
+                const upperTeams = qualified.slice(0, 4)
+                const lowerTeams = qualified.slice(4, 8)
+                if (upperTeams.length >= 2) {
+                  await adminGenerateKnockout(token, tournamentId, 'UPPER', upperTeams)
+                }
+                if (lowerTeams.length >= 2) {
+                  await adminGenerateKnockout(token, tournamentId, 'LOWER', lowerTeams)
+                }
                 load()
-              }}
-              className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500"
-            >
-              Generate Bracket
-            </button>
+              } catch (err) {
+                alert(err instanceof Error ? err.message : 'Gagal generate bracket')
+              }
+            }}
+            className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500"
+          >
+            Generate Bracket
+          </button>
             <button
               onClick={async () => {
                 if (!token) return

@@ -325,7 +325,7 @@ export async function adminGenerateKnockout(token: string, tournamentId: string,
       'Content-Type': 'application/json',
       'X-User-Token': token,
     },
-    body: JSON.stringify(qualifiedTeamIds),
+    body: JSON.stringify({ qualified_team_ids: qualifiedTeamIds }),
   })
   if (!response.ok) {
     const error = await response.json()
