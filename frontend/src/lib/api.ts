@@ -224,7 +224,7 @@ export async function adminSeedPayments(token: string): Promise<{ inserted_count
   return response.json()
 }
 
-export async function adminSyncParticipants(token: string): Promise<{ message: string; count: number }> {
+export async function adminSyncParticipants(token: string): Promise<{ deleted_count: number; inserted_count: number; updated_count: number; total_participants: number; team_regenerated: boolean; message: string }> {
   const response = await fetch(`${API_BASE}/api/admin/sync-participants`, {
     method: 'POST',
     headers: {
