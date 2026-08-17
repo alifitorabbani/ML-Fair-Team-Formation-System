@@ -271,7 +271,6 @@ class TournamentService:
         tournament = await self.tournament_repo.get_by_id(tournament_id)
         if not tournament:
             raise ValueError("Tournament not found")
-        await self.group_member_repo.delete_by_tournament(tournament_id)
         await self.group_repo.delete_by_tournament(tournament_id)
         await self.db.flush()
         if tournament.status == TournamentStatus.GROUPS_CONFIGURED:
