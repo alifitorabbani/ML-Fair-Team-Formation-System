@@ -12,6 +12,7 @@ from app.tournament.repositories.slot_repository import KnockoutSlotRepository
 from app.tournament.repositories.schedule_version_repository import ScheduleVersionRepository
 from app.tournament.repositories.placement_repository import TournamentPlacementRepository
 from app.tournament.repositories.bracket_qualification_repository import BracketQualificationRepository
+from app.tournament.repositories.bracket_match_map_repository import BracketMatchMapRepository
 
 __all__ = [
     "TournamentRepository",
@@ -28,4 +29,5 @@ __all__ = [
     "ScheduleVersionRepository",
     "TournamentPlacementRepository",
     "BracketQualificationRepository",
+    "BracketMatchMapRepository",
 ]

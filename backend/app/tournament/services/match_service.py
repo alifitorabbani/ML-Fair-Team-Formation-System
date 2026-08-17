@@ -3,8 +3,8 @@ from typing import Optional, List, Dict, Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.tournament.models.tournament_models import Match, MatchResultVersion
-from app.tournament.repositories import MatchRepository, MatchResultVersionRepository
+from app.tournament.models.tournament_models import Match, MatchResultVersion, BracketMatchMap
+from app.tournament.repositories import MatchRepository, MatchResultVersionRepository, BracketMatchMapRepository
 from app.tournament.constants import BOFormat, BO_WIN_REQUIREMENTS, MatchStatus
 
 
@@ -13,6 +13,7 @@ class MatchService:
         self.db = db
         self.match_repo = MatchRepository(db)
         self.result_version_repo = MatchResultVersionRepository(db)
+        self.map_repo = BracketMatchMapRepository(db)
 
     def validate_bo_score(self, score_a: int, score_b: int, format: str) -> bool:
         required = BO_WIN_REQUIREMENTS.get(format)
@@ -27,7 +28,7 @@ class MatchService:
             return False
         return True
 
-    async def submit_result(self, match_id: str, score_a: int, score_b: int, kills_a: Optional[int] = None, kills_b: Optional[int] = None, deaths_a: Optional[int] = None, deaths_b: Optional[int] = None, change_reason: Optional[str] = None) -> Match:
+    async def submit_result(self, match_id: str, score_a: int, score_b: int, kills_a: Optional[int] = None, kills_b: Optional[int] = None, deaths_a: Optional[int] = None, deaths_b: Optional[int] = None, change_reason: Optional[str] = None, map_results: Optional[List[Dict[str, Any]]] = None) -> Match:
         match = await self.match_repo.get_by_id(match_id)
         if not match:
             raise ValueError("Match not found")
@@ -60,6 +61,55 @@ class MatchService:
         match.updated_at = datetime.utcnow()
         await self.db.flush()
         await self.db.refresh(match)
+        if map_results and match.format in (BOFormat.BO3, BOFormat.BO5, BOFormat.BO7):
+            await self.map_repo.delete_by_match(match_id)
+            required_wins = BO_WIN_REQUIREMENTS.get(match.format, 1)
+            team_a_wins = 0
+            team_b_wins = 0
+            for map_data in map_results:
+                map_number = map_data.get("map_number")
+                if map_number is None:
+                    continue
+                map_winner = map_data.get("winner_team_id")
+                if map_winner == match.team_a_id:
+                    team_a_wins += 1
+                elif map_winner == match.team_b_id:
+                    team_b_wins += 1
+                await self.map_repo.create(
+                    {
+                        "match_id": match_id,
+                        "map_number": map_number,
+                        "team_a_id": map_data.get("team_a_id", match.team_a_id),
+                        "team_b_id": map_data.get("team_b_id", match.team_b_id),
+                        "winner_team_id": map_winner,
+                        "score_a": map_data.get("score_a"),
+                        "score_b": map_data.get("score_b"),
+                        "kills_a": map_data.get("kills_a"),
+                        "kills_b": map_data.get("kills_b"),
+                        "deaths_a": map_data.get("deaths_a"),
+                        "deaths_b": map_data.get("deaths_b"),
+                        "status": "COMPLETED",
+                    }
+                )
+                if team_a_wins >= required_wins or team_b_wins >= required_wins:
+                    break
+        next_version = await self.result_version_repo.get_next_version(match_id)
+        await self.result_version_repo.create(
+            {
+                "match_id": match_id,
+                "version": next_version,
+                "score_a": score_a,
+                "score_b": score_b,
+                "kills_a": kills_a,
+                "kills_b": kills_b,
+                "deaths_a": deaths_a,
+                "deaths_b": deaths_b,
+                "winner_team_id": match.winner_team_id,
+                "verified": True,
+                "change_reason": change_reason,
+            }
+        )
+        await self.db.flush()
         return match
 
     async def confirm_result(self, match_id: str) -> Match:

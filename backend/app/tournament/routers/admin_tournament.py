@@ -566,7 +566,15 @@ async def submit_result(tournament_id: str, match_id: str, data: MatchResultSubm
     _ = get_admin_user(x_user_token)
     service = TournamentService(db)
     try:
-        match = await service.submit_match_result(tournament_id, match_id, data)
+        map_results = None
+        if hasattr(data, 'map_results') and data.map_results:
+            map_results = [m.model_dump() for m in data.map_results]
+        match = await service.submit_match_result(
+            tournament_id,
+            match_id,
+            data,
+            map_results=map_results,
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return MatchResponse(

@@ -139,6 +139,20 @@ class MatchUpdate(BaseModel):
     status: Optional[MatchStatusEnum] = None
 
 
+class BracketMatchMapSubmit(BaseModel):
+    map_number: int
+    team_a_id: Optional[str] = None
+    team_b_id: Optional[str] = None
+    score_a: Optional[int] = None
+    score_b: Optional[int] = None
+    kills_a: Optional[int] = None
+    kills_b: Optional[int] = None
+    deaths_a: Optional[int] = None
+    deaths_b: Optional[int] = None
+    winner_team_id: Optional[str] = None
+    status: Optional[str] = None
+
+
 class MatchResultSubmit(BaseModel):
     score_a: int
     score_b: int
@@ -147,6 +161,7 @@ class MatchResultSubmit(BaseModel):
     deaths_a: Optional[int] = None
     deaths_b: Optional[int] = None
     change_reason: Optional[str] = None
+    map_results: Optional[List[BracketMatchMapSubmit]] = None
 
 
 class MatchResultOCRResponse(BaseModel):

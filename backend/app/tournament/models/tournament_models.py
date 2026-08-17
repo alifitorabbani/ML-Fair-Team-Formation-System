@@ -149,10 +149,36 @@ class Match(Base):
     group = relationship("TournamentGroup", back_populates="matches")
     bracket = relationship("KnockoutBracket", back_populates="matches")
     result_versions = relationship("MatchResultVersion", back_populates="match", cascade="all, delete-orphan")
+    map_results = relationship("BracketMatchMap", back_populates="match", cascade="all, delete-orphan")
 
     __table_args__ = (
         Index("ix_matches_tournament_stage", "tournament_id", "stage"),
         Index("ix_matches_scheduled_date", "scheduled_date"),
+    )
+
+
+class BracketMatchMap(Base):
+    __tablename__ = "bracket_match_maps"
+
+    id = Column(String, primary_key=True, default=uuid_str, index=True)
+    match_id = Column(String, ForeignKey("matches.id", ondelete="CASCADE"), nullable=False, index=True)
+    map_number = Column(Integer, nullable=False)
+    team_a_id = Column(String, nullable=True)
+    team_b_id = Column(String, nullable=True)
+    winner_team_id = Column(String, nullable=True)
+    score_a = Column(Integer, nullable=True)
+    score_b = Column(Integer, nullable=True)
+    kills_a = Column(Integer, nullable=True)
+    kills_b = Column(Integer, nullable=True)
+    deaths_a = Column(Integer, nullable=True)
+    deaths_b = Column(Integer, nullable=True)
+    status = Column(String, nullable=False, default="PENDING", index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    match = relationship("Match", back_populates="map_results")
+
+    __table_args__ = (
+        UniqueConstraint("match_id", "map_number", name="uq_match_map_number"),
     )
 
 

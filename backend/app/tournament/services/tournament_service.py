@@ -83,6 +83,7 @@ class TournamentService:
         self.group_repo = TournamentGroupRepository(db)
         self.group_member_repo = TournamentGroupMemberRepository(db)
         self.match_repo = MatchRepository(db)
+        self.match_service = MatchService(db)
         self.result_version_repo = MatchResultVersionRepository(db)
         self.standing_repo = GroupStandingRepository(db)
         self.bracket_repo = KnockoutBracketRepository(db)
@@ -342,37 +343,24 @@ class TournamentService:
             raise ValueError(f"Invalid score for {match.format}: winner must have exactly {required_wins} wins")
         if data.score_a == data.score_b:
             raise ValueError("Score cannot be tied")
-        winner_id = match.team_a_id if data.score_a > data.score_b else match.team_b_id
-        match.score_a = data.score_a
-        match.score_b = data.score_b
-        match.kills_a = data.kills_a
-        match.kills_b = data.kills_b
-        match.deaths_a = data.deaths_a
-        match.deaths_b = data.deaths_b
-        match.winner_team_id = winner_id
-        match.status = MatchStatus.COMPLETED
-        match.updated_at = datetime.utcnow()
-        await self.db.flush()
-        await self.db.refresh(match)
-        next_version = await self.result_version_repo.get_next_version(match_id)
-        await self.result_version_repo.create(
-            {
-                "match_id": match_id,
-                "version": next_version,
-                "score_a": data.score_a,
-                "score_b": data.score_b,
-                "kills_a": data.kills_a,
-                "kills_b": data.kills_b,
-                "deaths_a": data.deaths_a,
-                "deaths_b": data.deaths_b,
-                "winner_team_id": winner_id,
-                "verified": True,
-                "change_reason": data.change_reason,
-            }
+        map_results = None
+        if hasattr(data, 'map_results') and data.map_results:
+            map_results = [m.model_dump() for m in data.map_results]
+        match = await self.match_service.submit_result(
+            match_id,
+            data.score_a,
+            data.score_b,
+            data.kills_a,
+            data.kills_b,
+            data.deaths_a,
+            data.deaths_b,
+            data.change_reason,
+            map_results=map_results,
         )
-        await self.db.flush()
         if match.stage == MatchStage.GROUP_STAGE and match.group_id:
             await self._recalculate_group_standings(tournament_id, match.group_id)
+        elif match.stage == MatchStage.KNOCKOUT and match.bracket_id:
+            await self._recalculate_group_standings(tournament_id, match.group_id) if match.group_id else None
         return match
 
     async def confirm_match_result(self, tournament_id: str, match_id: str) -> Optional[Match]:

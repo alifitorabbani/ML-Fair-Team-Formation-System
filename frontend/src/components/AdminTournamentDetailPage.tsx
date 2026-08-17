@@ -731,9 +731,12 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
             <Card><p className="text-sm text-gray-400">Belum ada bracket.</p></Card>
           ) : (
             <AnimatedBracket
-              upperMatches={knockout.filter((b: any) => b.bracket_type === 'UPPER').flatMap((b: any) => b.rounds?.flatMap((r: any) => r.slots?.map((s: any) => ({ ...s, bracket_type: 'UPPER' })) || [])).filter((m: any) => m.team_id)}
-              lowerMatches={knockout.filter((b: any) => b.bracket_type === 'LOWER').flatMap((b: any) => b.rounds?.flatMap((r: any) => r.slots?.map((s: any) => ({ ...s, bracket_type: 'LOWER' })) || [])).filter((m: any) => m.team_id)}
+              upperMatches={knockout.filter((b: any) => b.bracket_type === 'UPPER').flatMap((b: any) => b.rounds?.flatMap((r: any) => r.slots?.map((s: any) => ({ ...s, bracket_type: 'UPPER' as const })) || [])).filter((m: any) => m.team_id)}
+              lowerMatches={knockout.filter((b: any) => b.bracket_type === 'LOWER').flatMap((b: any) => b.rounds?.flatMap((r: any) => r.slots?.map((s: any) => ({ ...s, bracket_type: 'LOWER' as const })) || [])).filter((m: any) => m.team_id)}
               grandFinal={null}
+              token={token}
+              tournamentId={tournamentId}
+              onMatchUpdate={load}
             />
           )}
         </div>
