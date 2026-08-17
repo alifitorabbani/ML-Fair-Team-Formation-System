@@ -240,8 +240,8 @@ class TournamentResponse(BaseModel):
     runner_up_team_id: Optional[str] = None
     third_place_team_id: Optional[str] = None
     created_by: Optional[str] = None
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     finalized_at: Optional[datetime] = None
 
 

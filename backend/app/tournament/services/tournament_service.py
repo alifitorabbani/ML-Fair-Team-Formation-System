@@ -135,13 +135,16 @@ class TournamentService:
         tournament = await self.tournament_repo.get_by_id(tournament_id)
         if not tournament:
             return None
-        dates = await self.date_repo.get_by_tournament(tournament_id)
-        teams = await self.team_repo.get_by_tournament(tournament_id)
-        groups = await self.group_repo.get_by_tournament(tournament_id)
-        matches = await self.match_repo.get_by_tournament(tournament_id)
-        brackets = await self.bracket_repo.get_by_tournament(tournament_id)
-        placements = await self.placement_repo.get_by_tournament(tournament_id)
-        schedule_versions = await self.schedule_version_repo.get_by_tournament(tournament_id)
+        try:
+            dates = await self.date_repo.get_by_tournament(tournament_id)
+            teams = await self.team_repo.get_by_tournament(tournament_id)
+            groups = await self.group_repo.get_by_tournament(tournament_id)
+            matches = await self.match_repo.get_by_tournament(tournament_id)
+            brackets = await self.bracket_repo.get_by_tournament(tournament_id)
+            placements = await self.placement_repo.get_by_tournament(tournament_id)
+            schedule_versions = await self.schedule_version_repo.get_by_tournament(tournament_id)
+        except Exception:
+            return None
         return {
             "tournament": tournament,
             "dates": dates,
