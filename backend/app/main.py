@@ -220,6 +220,12 @@ async def lifespan(app: FastAPI):
             await conn.execute(
                 text("CREATE INDEX IF NOT EXISTS ix_matches_loser_next_match_id ON matches(loser_next_match_id)")
             )
+            await conn.execute(
+                text("ALTER TABLE matches ADD COLUMN IF NOT EXISTS participant_source_a VARCHAR NULL")
+            )
+            await conn.execute(
+                text("ALTER TABLE matches ADD COLUMN IF NOT EXISTS participant_source_b VARCHAR NULL")
+            )
     except Exception as e:
         print(f"Startup warning: database initialization failed: {e}")
     yield

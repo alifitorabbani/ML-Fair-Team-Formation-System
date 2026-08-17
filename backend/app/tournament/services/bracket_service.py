@@ -11,6 +11,8 @@ from app.tournament.models.tournament_models import (
     Match,
     TournamentPlacement,
     BracketStanding,
+    TournamentGroup,
+    GroupStanding,
 )
 from app.tournament.repositories import (
     TournamentRepository,
@@ -175,37 +177,15 @@ class BracketService:
         self.result_version_repo = MatchResultVersionRepository(db)
         self.bracket_standing_repo = BracketStandingRepository(db)
 
-    async def generate_bracket(self, tournament_id: str, qualified_teams: List[str], seeding: Optional[List[str]] = None, populate_matches: bool = True) -> Dict[str, Any]:
-        """Generate exact 8-team double elimination bracket."""
+    async def generate_bracket(self, tournament_id: str, qualified_teams: Optional[List[str]] = None, seeding: Optional[List[str]] = None, populate_matches: bool = True) -> Dict[str, Any]:
+        """Generate exact 8-team double elimination bracket template."""
         tournament = await self.tournament_repo.get_by_id(tournament_id)
         if not tournament:
             raise ValueError("Tournament not found")
-        if len(qualified_teams) < 8:
-            raise ValueError(f"Exactly 8 qualified teams required, got {len(qualified_teams)}")
 
         # Clear existing bracket data
         await self.bracket_repo.delete_by_tournament(tournament_id)
         
-        # Get qualified teams with ranks from bracket_qualifications
-        from sqlalchemy import select
-        from app.tournament.models.tournament_models import BracketQualification
-        stmt = select(BracketQualification.team_id, BracketQualification.rank).where(
-            BracketQualification.tournament_id == tournament_id,
-            BracketQualification.bracket_type == BracketType.UPPER,
-        ).order_by(BracketQualification.rank.asc())
-        result = await self.db.execute(stmt)
-        upper_teams = [row[0] for row in result.fetchall()]
-        
-        stmt = select(BracketQualification.team_id, BracketQualification.rank).where(
-            BracketQualification.tournament_id == tournament_id,
-            BracketQualification.bracket_type == BracketType.LOWER,
-        ).order_by(BracketQualification.rank.asc())
-        result = await self.db.execute(stmt)
-        lower_teams = [row[0] for row in result.fetchall()]
-        
-        if len(upper_teams) != 4 or len(lower_teams) != 4:
-            raise ValueError(f"Need exactly 4 upper and 4 lower teams, got {len(upper_teams)} upper, {len(lower_teams)} lower")
-
         # Create bracket structures for visualization
         upper_bracket = await self.bracket_repo.create({
             "tournament_id": tournament_id,
@@ -275,25 +255,44 @@ class BracketService:
                 bracket_id = None
                 round_obj = None
 
-            # Determine initial teams
+            # Determine initial teams and sources
             team_a_id = None
             team_b_id = None
+            participant_source_a = None
+            participant_source_b = None
             
             if "team_a_seed" in match_def:
                 if match_def["bracket"] == "UPPER":
                     idx = match_def["team_a_seed"] - 1
-                    team_a_id = upper_teams[idx]
+                    if qualified_teams and len(qualified_teams) >= 8:
+                        team_a_id = qualified_teams[idx]
+                    else:
+                        participant_source_a = f"FINAL_STANDINGS_RANK_{match_def['team_a_seed']}"
                 else:
                     idx = match_def["team_a_seed"] - 5
-                    team_b_id = lower_teams[idx]
+                    if qualified_teams and len(qualified_teams) >= 8:
+                        team_a_id = qualified_teams[idx]
+                    else:
+                        participant_source_a = f"FINAL_STANDINGS_RANK_{match_def['team_a_seed']}"
             
             if "team_b_seed" in match_def:
                 if match_def["bracket"] == "UPPER":
                     idx = match_def["team_b_seed"] - 1
-                    team_b_id = upper_teams[idx]
+                    if qualified_teams and len(qualified_teams) >= 8:
+                        team_b_id = qualified_teams[idx]
+                    else:
+                        participant_source_b = f"FINAL_STANDINGS_RANK_{match_def['team_b_seed']}"
                 else:
                     idx = match_def["team_b_seed"] - 5
-                    team_b_id = lower_teams[idx]
+                    if qualified_teams and len(qualified_teams) >= 8:
+                        team_b_id = qualified_teams[idx]
+                    else:
+                        participant_source_b = f"FINAL_STANDINGS_RANK_{match_def['team_b_seed']}"
+
+            if "team_a_source" in match_def:
+                participant_source_a = match_def["team_a_source"]
+            if "team_b_source" in match_def:
+                participant_source_b = match_def["team_b_source"]
 
             match = await self.match_repo.create({
                 "tournament_id": tournament_id,
@@ -306,6 +305,8 @@ class BracketService:
                 "end_time": datetime.utcnow().time(),
                 "team_a_id": team_a_id,
                 "team_b_id": team_b_id,
+                "participant_source_a": participant_source_a,
+                "participant_source_b": participant_source_b,
                 "format": match_def["format"],
                 "status": MatchStatus.SCHEDULED,
                 "winner_team_id": None,
@@ -334,6 +335,76 @@ class BracketService:
             "upper_bracket": upper_bracket,
             "lower_bracket": lower_bracket,
             "matches": matches,
+        }
+
+    async def resolve_bracket_from_standings(self, tournament_id: str) -> Dict[str, Any]:
+        """Resolve bracket participants from final group standings."""
+        from sqlalchemy import select
+        from app.tournament.models.tournament_models import GroupStanding
+        
+        # Get all group standings sorted by rank
+        stmt = (
+            select(GroupStanding)
+            .where(GroupStanding.group_id.in_(
+                select(TournamentGroup.id).where(TournamentGroup.tournament_id == tournament_id)
+            ))
+            .order_by(GroupStanding.rank.asc(), GroupStanding.points.desc())
+        )
+        result = await self.db.execute(stmt)
+        standings = result.scalars().all()
+        
+        if len(standings) < 8:
+            raise ValueError(f"Need at least 8 teams in standings to resolve bracket, got {len(standings)}")
+        
+        # Build rank -> team_id mapping from standings
+        rank_to_team = {}
+        for s in standings:
+            if s.rank is not None and s.team_id:
+                rank_to_team[s.rank] = s.team_id
+        
+        # Get all knockout matches
+        matches = await self.match_repo.get_by_tournament(tournament_id, MatchStage.KNOCKOUT)
+        match_map = {m.match_number: m for m in matches if m.match_number is not None}
+        
+        # Resolve initial upper bracket matches (1-2)
+        # Match 1: Rank 1 vs Rank 4
+        if 1 in match_map:
+            m = match_map[1]
+            m.team_a_id = rank_to_team.get(1)
+            m.team_b_id = rank_to_team.get(4)
+            m.participant_source_a = f"FINAL_STANDINGS_RANK_1"
+            m.participant_source_b = f"FINAL_STANDINGS_RANK_4"
+        
+        # Match 2: Rank 2 vs Rank 3
+        if 2 in match_map:
+            m = match_map[2]
+            m.team_a_id = rank_to_team.get(2)
+            m.team_b_id = rank_to_team.get(3)
+            m.participant_source_a = f"FINAL_STANDINGS_RANK_2"
+            m.participant_source_b = f"FINAL_STANDINGS_RANK_3"
+        
+        # Resolve initial lower bracket matches (3-4)
+        # Match 3: Rank 5 vs Rank 8
+        if 3 in match_map:
+            m = match_map[3]
+            m.team_a_id = rank_to_team.get(5)
+            m.team_b_id = rank_to_team.get(8)
+            m.participant_source_a = f"FINAL_STANDINGS_RANK_5"
+            m.participant_source_b = f"FINAL_STANDINGS_RANK_8"
+        
+        # Match 4: Rank 6 vs Rank 7
+        if 4 in match_map:
+            m = match_map[4]
+            m.team_a_id = rank_to_team.get(6)
+            m.team_b_id = rank_to_team.get(7)
+            m.participant_source_a = f"FINAL_STANDINGS_RANK_6"
+            m.participant_source_b = f"FINAL_STANDINGS_RANK_7"
+        
+        await self.db.flush()
+        
+        return {
+            "resolved_matches": [match_map.get(i) for i in range(1, 5) if i in match_map],
+            "standings_used": len(standings),
         }
 
     async def advance_winner(self, tournament_id: str, match_id: str) -> Optional[Match]:

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { adminUpdateTournament, adminGetTournamentTeams, adminGetAvailableTeams, adminCreateGroup, adminUpdateGroup, adminGetGroups, adminClearGroups, adminAutoAssignGroups, adminGenerateSchedule, adminGetSchedule, adminGetStandings, adminRecalculateStandings, adminOverrideStandings, adminCreateMatch, adminUpdateMatch, adminDeleteMatch, adminSubmitMatchResult, adminConfirmMatchResult, adminGenerateKnockout, adminGetKnockout, adminAdvanceKnockout, adminSetPlacement, adminFinalizeChampion, adminSetBracketQualification, adminGetBracketQualifications, adminClearBracketQualifications, adminResetBracket, adminGetDailyStandings } from '@/lib/tournamentApi'
+import { adminUpdateTournament, adminGetTournamentTeams, adminGetAvailableTeams, adminCreateGroup, adminUpdateGroup, adminGetGroups, adminClearGroups, adminAutoAssignGroups, adminGenerateSchedule, adminGetSchedule, adminGetStandings, adminRecalculateStandings, adminOverrideStandings, adminCreateMatch, adminUpdateMatch, adminDeleteMatch, adminSubmitMatchResult, adminConfirmMatchResult, adminGenerateKnockout, adminGetKnockout, adminAdvanceKnockout, adminSetPlacement, adminFinalizeChampion, adminSetBracketQualification, adminGetBracketQualifications, adminClearBracketQualifications, adminResetBracket, adminResolveKnockout, adminGetDailyStandings } from '@/lib/tournamentApi'
 import { useAuthToken } from '@/lib/hooks/useAuth'
 import { TournamentResponse } from '@/types'
 import LoadingSpinner from '@/components/shared/LoadingSpinner'
@@ -42,6 +42,7 @@ export default function AdminTournamentDetailPage({ tournament, onBack }: { tour
     buffer_minutes: 0,
   })
   const [showScheduleConfig, setShowScheduleConfig] = useState(false)
+  const [bracketResolved, setBracketResolved] = useState(false)
 
   const load = async () => {
     if (!token) return
@@ -68,6 +69,26 @@ export default function AdminTournamentDetailPage({ tournament, onBack }: { tour
       setKnockout(k)
       setBracketQualifications(bq)
       setMatches(s)
+      // Auto-resolve bracket when group stage is complete (all teams played = 8)
+      const groupMatches = s.filter((m: any) => m.stage === 'GROUP_STAGE')
+      const allTeamsPlayedEight = t.length > 0 && groupMatches.length > 0 && t.every((team: any) => {
+        const played = groupMatches.filter((m: any) => m.team_a_id === team.team_id || m.team_b_id === team.team_id).length
+        return played >= 8
+      })
+      const hasUnresolvedBracket = k && (k.upper_matches || []).some((m: any) => !m.team_a_id || !m.team_b_id)
+      if (allTeamsPlayedEight && hasUnresolvedBracket && !bracketResolved) {
+        try {
+          await adminResolveKnockout(token, tournament.id)
+          setBracketResolved(true)
+        } catch {
+          // ignore auto-resolve error
+        }
+        load()
+        return
+      }
+      if (!allTeamsPlayedEight) {
+        setBracketResolved(false)
+      }
       // Load daily standings for the first available date
       const dates = Array.from(new Set(s.map((match: any) => match.scheduled_date).filter(Boolean)))
       if (dates.length > 0) {
@@ -800,11 +821,16 @@ export default function AdminTournamentDetailPage({ tournament, onBack }: { tour
                     {group.standings.map((s: any) => {
                       const winRate = s.played > 0 ? ((s.win / s.played) * 100).toFixed(1) : '0.0'
                       const qualification = bracketQualifications.find((q: any) => q.team_id === s.team_id && q.group_id === group.group_id)
-                      const isEliminated = !qualification || !qualification.bracket_type
+                      const rank = s.rank || 999
+                      const isUpper = rank >= 1 && rank <= 4
+                      const isLower = rank >= 5 && rank <= 8
+                      const isEliminated = rank > 8
+                      const rowClass = isUpper ? 'bg-blue-500/5 border-blue-500/10' : isLower ? 'bg-green-500/5 border-green-500/10' : isEliminated ? 'bg-red-500/5 border-red-500/10' : 'border-white/5'
+                      const nameClass = isUpper ? 'text-blue-300' : isLower ? 'text-green-300' : isEliminated ? 'text-red-300' : 'text-white'
                       return (
-                        <tr key={s.team_id} className={`border-b ${isEliminated ? 'bg-red-500/5' : 'border-white/5'}`}>
+                        <tr key={s.team_id} className={`border-b ${rowClass}`}>
                           <td className="py-2 pr-4 text-gray-300">{s.rank || '-'}</td>
-                          <td className={`py-2 pr-4 ${isEliminated ? 'text-red-300' : 'text-white'}`}>{s.team_name || s.team_id}</td>
+                          <td className={`py-2 pr-4 ${nameClass}`}>{s.team_name || s.team_id}</td>
                           <td className="py-2 pr-4 text-gray-300">{s.played}</td>
                           <td className="py-2 pr-4 text-green-400">{s.win}</td>
                           <td className="py-2 pr-4 text-red-400">{s.loss}</td>
@@ -911,25 +937,31 @@ export default function AdminTournamentDetailPage({ tournament, onBack }: { tour
               onClick={async () => {
                 if (!token) return
                 try {
-                  const qualified = standings.flatMap((group: any) => 
-                    group.standings
-                      .filter((s: any) => s.rank <= 8)
-                      .map((s: any) => s.team_id)
-                  )
-                  if (qualified.length < 8) {
-                    alert('Butuh tepat 8 tim yang lolos kualifikasi')
-                    return
-                  }
-                  await adminGenerateKnockout(token, tournamentId, qualified, true)
+                  await adminGenerateKnockout(token, tournamentId, [], true)
                   load()
                 } catch (err) {
                   alert(err instanceof Error ? err.message : 'Gagal generate bracket')
                 }
               }}
-              disabled={schedule.some((m: any) => m.status !== 'COMPLETED')}
-              className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500"
             >
               Generate Bracket
+            </button>
+            <button
+              onClick={async () => {
+                if (!token) return
+                try {
+                  await adminResolveKnockout(token, tournamentId)
+                  setBracketResolved(true)
+                  load()
+                } catch (err) {
+                  alert(err instanceof Error ? err.message : 'Gagal resolve bracket')
+                }
+              }}
+              disabled={!knockout || (knockout.upper_matches?.length === 0 && knockout.lower_matches?.length === 0 && !knockout.grand_final)}
+              className="rounded-xl border border-white/10 px-4 py-2 text-sm font-medium text-gray-300 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Resolve Bracket
             </button>
             <button
               onClick={async () => {

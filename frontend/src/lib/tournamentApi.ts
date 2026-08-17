@@ -368,6 +368,20 @@ export async function adminGenerateKnockout(token: string, tournamentId: string,
   return response.json()
 }
 
+export async function adminResolveKnockout(token: string, tournamentId: string): Promise<any> {
+  const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/knockout/resolve`, {
+    method: 'POST',
+    headers: {
+      'X-User-Token': token,
+    },
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to resolve knockout')
+  }
+  return response.json()
+}
+
 export async function adminResetBracket(token: string, tournamentId: string): Promise<any> {
   const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/knockout/reset`, {
     method: 'POST',
