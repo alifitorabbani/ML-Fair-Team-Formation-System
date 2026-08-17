@@ -36,6 +36,7 @@ from app.tournament.repositories import (
     ScheduleVersionRepository,
     TournamentPlacementRepository,
 )
+from app.tournament.services.match_service import MatchService
 from app.tournament.schemas.tournament_schemas import (
     TournamentCreate,
     TournamentUpdate,
