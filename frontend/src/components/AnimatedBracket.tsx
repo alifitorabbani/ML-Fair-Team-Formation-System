@@ -18,6 +18,8 @@ interface BracketMatch {
   is_upper_final?: boolean
   is_lower_final?: boolean
   is_grand_final?: boolean
+  next_match_id?: string
+  loser_next_match_id?: string
   map_results?: Array<{
     id?: string
     map_number: number
@@ -39,6 +41,7 @@ interface BracketProps {
   token: string | null
   tournamentId: string
   onMatchUpdate?: () => void
+  onAdvance?: (matchId: string) => void
 }
 
 function getRequiredWins(format: string): number {
@@ -54,10 +57,11 @@ function getRequiredWins(format: string): number {
   }
 }
 
-function BracketMatchCard({ match, index, isFinal, isGrandFinal, token, tournamentId, onMatchUpdate }: { match: BracketMatch; index: number; isFinal?: boolean; isGrandFinal?: boolean; token: string | null; tournamentId: string; onMatchUpdate?: () => void }) {
+function BracketMatchCard({ match, index, isFinal, isGrandFinal, token, tournamentId, onMatchUpdate, onAdvance }: { match: BracketMatch; index: number; isFinal?: boolean; isGrandFinal?: boolean; token: string | null; tournamentId: string; onMatchUpdate?: () => void; onAdvance?: (matchId: string) => void }) {
   const [animated, setAnimated] = useState(false)
   const [mapResults, setMapResults] = useState<Record<number, { team_a_wins: number; team_b_wins: number; maps: any[] }>>({})
   const [submitting, setSubmitting] = useState(false)
+  const [advancing, setAdvancing] = useState(false)
 
   useEffect(() => {
     const timer = setTimeout(() => setAnimated(true), index * 100)
@@ -91,6 +95,18 @@ function BracketMatchCard({ match, index, isFinal, isGrandFinal, token, tourname
   }
 
   const requiredWins = getRequiredWins(match.format)
+
+  const handleAdvance = async () => {
+    if (!token || !onAdvance || advancing) return
+    setAdvancing(true)
+    try {
+      await onAdvance(match.id)
+    } catch (err) {
+      console.error('Failed to advance match:', err)
+    } finally {
+      setAdvancing(false)
+    }
+  }
 
   const handleMapSubmit = async (mapNumber: number, teamAWin: boolean) => {
     if (!token || submitting) return
@@ -190,15 +206,26 @@ function BracketMatchCard({ match, index, isFinal, isGrandFinal, token, tourname
         </div>
       )}
       {match.status === 'COMPLETED' && match.winner_team_id && (
-        <div className="mt-2 text-xs text-green-400">
-          Winner: {match.winner_team_id}
+        <div className="mt-2 space-y-2">
+          <div className="text-xs text-green-400">
+            Winner: {match.winner_team_id}
+          </div>
+          {onAdvance && match.next_match_id && (
+            <button
+              onClick={handleAdvance}
+              disabled={advancing}
+              className="rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-500 disabled:opacity-50"
+            >
+              {advancing ? 'Advancing...' : 'Advance Winner'}
+            </button>
+          )}
         </div>
       )}
     </div>
   )
 }
 
-export default function AnimatedBracket({ upperMatches, lowerMatches, grandFinal, token, tournamentId, onMatchUpdate }: BracketProps) {
+export default function AnimatedBracket({ upperMatches, lowerMatches, grandFinal, token, tournamentId, onMatchUpdate, onAdvance }: BracketProps) {
   const [showUpper, setShowUpper] = useState(false)
   const [showLower, setShowLower] = useState(false)
   const [showGrandFinal, setShowGrandFinal] = useState(false)
@@ -233,6 +260,7 @@ export default function AnimatedBracket({ upperMatches, lowerMatches, grandFinal
                 token={token}
                 tournamentId={tournamentId}
                 onMatchUpdate={onMatchUpdate}
+                onAdvance={onAdvance}
               />
             ))}
             {upperMatches.length === 0 && (
@@ -257,6 +285,7 @@ export default function AnimatedBracket({ upperMatches, lowerMatches, grandFinal
                 token={token}
                 tournamentId={tournamentId}
                 onMatchUpdate={onMatchUpdate}
+                onAdvance={onAdvance}
               />
             ))}
             {lowerMatches.length === 0 && (
@@ -281,6 +310,7 @@ export default function AnimatedBracket({ upperMatches, lowerMatches, grandFinal
               token={token}
               tournamentId={tournamentId}
               onMatchUpdate={onMatchUpdate}
+              onAdvance={onAdvance}
             />
           </div>
         </div>

@@ -197,28 +197,29 @@ export interface StandingResponse {
 }
 
 export interface BracketResponse {
-  id: string
-  tournament_id: string
-  name: string
-  bracket_type: string
-  sort_order?: number
-  rounds?: BracketRoundResponse[]
+  upper_matches: BracketMatchResponse[]
+  lower_matches: BracketMatchResponse[]
+  grand_final: BracketMatchResponse | null
+  lower_final: BracketMatchResponse | null
 }
 
-export interface BracketRoundResponse {
+export interface BracketMatchResponse {
   id: string
-  round_number: number
-  round_name?: string
-  slots: BracketSlotResponse[]
-}
-
-export interface BracketSlotResponse {
-  id: string
-  slot_number: number
-  team_id?: string
-  next_match_id?: string
-  next_slot_number?: number
+  match_number: number
+  team_a_id: string | null
+  team_b_id: string | null
+  winner_team_id: string | null
   status: string
+  format: string
+  score_a?: number
+  score_b?: number
+  round: number
+  bracket_type: string
+  is_upper_final?: boolean
+  is_lower_final?: boolean
+  is_grand_final?: boolean
+  next_match_id?: string
+  loser_next_match_id?: string
 }
 
 export interface PlacementResponse {

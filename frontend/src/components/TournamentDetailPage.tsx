@@ -18,7 +18,7 @@ export default function TournamentDetailPage({ tournamentId, onBack }: { tournam
   const [schedule, setSchedule] = useState<MatchResponse[]>([])
   const [matches, setMatches] = useState<MatchResponse[]>([])
   const [standings, setStandings] = useState<any[]>([])
-  const [knockout, setKnockout] = useState<BracketResponse[]>([])
+  const [knockout, setKnockout] = useState<BracketResponse | null>(null)
   const [results, setResults] = useState<MatchResponse[]>([])
   const [placements, setPlacements] = useState<PlacementResponse[]>([])
   const [loading, setLoading] = useState(true)
@@ -42,7 +42,7 @@ export default function TournamentDetailPage({ tournamentId, onBack }: { tournam
         setSchedule(s as MatchResponse[])
         setMatches(m as MatchResponse[])
         setStandings(st as any[])
-        setKnockout(k as BracketResponse[])
+        setKnockout(k as BracketResponse)
         setResults(r as MatchResponse[])
         setPlacements(p as PlacementResponse[])
       })
@@ -220,39 +220,129 @@ export default function TournamentDetailPage({ tournamentId, onBack }: { tournam
 
       {activeTab === 'bracket' && (
         <div className="space-y-6">
-          {knockout.length === 0 ? (
+          {!knockout || (!knockout.upper_matches?.length && !knockout.lower_matches?.length && !knockout.grand_final) ? (
             <Card><p className="text-sm text-gray-400">Belum ada bracket.</p></Card>
           ) : (
-            knockout.map((bracket) => (
-              <Card key={bracket.id}>
-                <h3 className="mb-4 text-lg font-semibold text-white">{bracket.name}</h3>
-                <div className="space-y-4">
-                  {bracket.rounds?.map((round) => (
-                    <div key={round.id}>
-                      <div className="mb-2 text-sm font-medium text-gray-400">{round.round_name}</div>
-                      <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-4">
-                        {round.slots.map((slot) => (
-                          <div
-                            key={slot.id}
-                            className={`rounded-xl border p-3 ${
-                              slot.team_id ? 'border-white/10 bg-surface-900/60' : 'border-dashed border-white/5 bg-surface-900/20'
-                            }`}
-                          >
-                            <div className="text-xs text-gray-500">Slot {slot.slot_number}</div>
-                            <div className={`mt-1 text-sm ${slot.team_id ? 'text-white' : 'text-gray-600'}`}>
-                              {slot.team_id || 'TBD'}
-                            </div>
-                            <div className={`mt-1 text-xs ${slot.status === 'FILLED' ? 'text-green-400' : 'text-gray-500'}`}>
-                              {slot.status}
-                            </div>
-                          </div>
-                        ))}
+            <div className="grid gap-6 lg:grid-cols-2">
+              {/* Upper Bracket */}
+              <Card>
+                <h3 className="mb-4 text-lg font-semibold text-green-300">Upper Bracket</h3>
+                <div className="space-y-3">
+                  {knockout.upper_matches?.map((match) => (
+                    <div key={match.id} className="rounded-xl border border-white/10 bg-surface-900/60 p-3">
+                      <div className="mb-1 text-xs text-gray-400">
+                        Match {match.match_number} ({match.format})
+                        {match.is_upper_final && ' - Upper Final'}
                       </div>
+                      <div className="space-y-1">
+                        <div className={`flex items-center justify-between rounded-lg px-2 py-1 ${match.winner_team_id === match.team_a_id ? 'bg-white/10' : 'bg-white/5'}`}>
+                          <span className="text-sm font-medium">{match.team_a_id || 'TBD'}</span>
+                          {match.score_a !== undefined && <span className="text-xs">{match.score_a}</span>}
+                        </div>
+                        <div className={`flex items-center justify-between rounded-lg px-2 py-1 ${match.winner_team_id === match.team_b_id ? 'bg-white/10' : 'bg-white/5'}`}>
+                          <span className="text-sm font-medium">{match.team_b_id || 'TBD'}</span>
+                          {match.score_b !== undefined && <span className="text-xs">{match.score_b}</span>}
+                        </div>
+                      </div>
+                      {match.status === 'COMPLETED' && match.winner_team_id && (
+                        <div className="mt-2 text-xs text-green-400">
+                          Winner: {match.winner_team_id}
+                        </div>
+                      )}
                     </div>
                   ))}
+                  {(!knockout.upper_matches || knockout.upper_matches.length === 0) && (
+                    <p className="text-xs text-gray-500">Belum ada match upper bracket.</p>
+                  )}
                 </div>
               </Card>
-            ))
+
+              {/* Lower Bracket */}
+              <Card>
+                <h3 className="mb-4 text-lg font-semibold text-yellow-300">Lower Bracket</h3>
+                <div className="space-y-3">
+                  {knockout.lower_matches?.map((match) => (
+                    <div key={match.id} className="rounded-xl border border-white/10 bg-surface-900/60 p-3">
+                      <div className="mb-1 text-xs text-gray-400">
+                        Match {match.match_number} ({match.format})
+                        {match.is_lower_final && ' - Lower Final'}
+                      </div>
+                      <div className="space-y-1">
+                        <div className={`flex items-center justify-between rounded-lg px-2 py-1 ${match.winner_team_id === match.team_a_id ? 'bg-white/10' : 'bg-white/5'}`}>
+                          <span className="text-sm font-medium">{match.team_a_id || 'TBD'}</span>
+                          {match.score_a !== undefined && <span className="text-xs">{match.score_a}</span>}
+                        </div>
+                        <div className={`flex items-center justify-between rounded-lg px-2 py-1 ${match.winner_team_id === match.team_b_id ? 'bg-white/10' : 'bg-white/5'}`}>
+                          <span className="text-sm font-medium">{match.team_b_id || 'TBD'}</span>
+                          {match.score_b !== undefined && <span className="text-xs">{match.score_b}</span>}
+                        </div>
+                      </div>
+                      {match.status === 'COMPLETED' && match.winner_team_id && (
+                        <div className="mt-2 text-xs text-green-400">
+                          Winner: {match.winner_team_id}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {(!knockout.lower_matches || knockout.lower_matches.length === 0) && (
+                    <p className="text-xs text-gray-500">Belum ada match lower bracket.</p>
+                  )}
+                </div>
+              </Card>
+            </div>
+          )}
+
+          {/* Grand Final and Lower Final */}
+          {(knockout && (knockout.grand_final || knockout.lower_final)) && (
+            <div className="grid gap-6 lg:grid-cols-2">
+              {knockout.lower_final && (
+                <Card>
+                  <h3 className="mb-4 text-lg font-semibold text-brand-300">Lower Final (BO5)</h3>
+                  <div className="rounded-xl border border-white/10 bg-surface-900/60 p-3">
+                    <div className="mb-1 text-xs text-gray-400">Match 9</div>
+                    <div className="space-y-1">
+                      <div className={`flex items-center justify-between rounded-lg px-2 py-1 ${knockout.lower_final.winner_team_id === knockout.lower_final.team_a_id ? 'bg-white/10' : 'bg-white/5'}`}>
+                        <span className="text-sm font-medium">{knockout.lower_final.team_a_id || 'TBD'}</span>
+                        {knockout.lower_final.score_a !== undefined && <span className="text-xs">{knockout.lower_final.score_a}</span>}
+                      </div>
+                      <div className={`flex items-center justify-between rounded-lg px-2 py-1 ${knockout.lower_final.winner_team_id === knockout.lower_final.team_b_id ? 'bg-white/10' : 'bg-white/5'}`}>
+                        <span className="text-sm font-medium">{knockout.lower_final.team_b_id || 'TBD'}</span>
+                        {knockout.lower_final.score_b !== undefined && <span className="text-xs">{knockout.lower_final.score_b}</span>}
+                      </div>
+                    </div>
+                    {knockout.lower_final.status === 'COMPLETED' && knockout.lower_final.winner_team_id && (
+                      <div className="mt-2 text-xs text-green-400">
+                        Winner: {knockout.lower_final.winner_team_id}
+                      </div>
+                    )}
+                  </div>
+                </Card>
+              )}
+
+              {knockout.grand_final && (
+                <Card>
+                  <h3 className="mb-4 text-lg font-semibold text-purple-300">Grand Final (BO7)</h3>
+                  <div className="rounded-xl border border-purple-500/30 bg-purple-500/5 p-3">
+                    <div className="mb-1 text-xs text-gray-400">Match 10</div>
+                    <div className="space-y-1">
+                      <div className={`flex items-center justify-between rounded-lg px-2 py-1 ${knockout.grand_final.winner_team_id === knockout.grand_final.team_a_id ? 'bg-white/10' : 'bg-white/5'}`}>
+                        <span className="text-sm font-medium">{knockout.grand_final.team_a_id || 'TBD'}</span>
+                        {knockout.grand_final.score_a !== undefined && <span className="text-xs">{knockout.grand_final.score_a}</span>}
+                      </div>
+                      <div className={`flex items-center justify-between rounded-lg px-2 py-1 ${knockout.grand_final.winner_team_id === knockout.grand_final.team_b_id ? 'bg-white/10' : 'bg-white/5'}`}>
+                        <span className="text-sm font-medium">{knockout.grand_final.team_b_id || 'TBD'}</span>
+                        {knockout.grand_final.score_b !== undefined && <span className="text-xs">{knockout.grand_final.score_b}</span>}
+                      </div>
+                    </div>
+                    {knockout.grand_final.status === 'COMPLETED' && knockout.grand_final.winner_team_id && (
+                      <div className="mt-2 text-xs text-green-400">
+                        Winner: {knockout.grand_final.winner_team_id}
+                      </div>
+                    )}
+                  </div>
+                </Card>
+              )}
+            </div>
           )}
         </div>
       )}

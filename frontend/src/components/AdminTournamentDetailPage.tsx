@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { adminGetTournament, adminUpdateTournament, adminGetTournamentTeams, adminGetAvailableTeams, adminCreateGroup, adminUpdateGroup, adminGetGroups, adminClearGroups, adminAutoAssignGroups, adminGenerateSchedule, adminGetSchedule, adminGetStandings, adminRecalculateStandings, adminOverrideStandings, adminCreateMatch, adminUpdateMatch, adminDeleteMatch, adminSubmitMatchResult, adminConfirmMatchResult, adminGenerateKnockout, adminGetKnockout, adminAdvanceKnockout, adminSetPlacement, adminFinalizeChampion, adminSetBracketQualification, adminGetBracketQualifications, adminClearBracketQualifications } from '@/lib/tournamentApi'
+import { adminGetTournament, adminUpdateTournament, adminGetTournamentTeams, adminGetAvailableTeams, adminCreateGroup, adminUpdateGroup, adminGetGroups, adminClearGroups, adminAutoAssignGroups, adminGenerateSchedule, adminGetSchedule, adminGetStandings, adminRecalculateStandings, adminOverrideStandings, adminCreateMatch, adminUpdateMatch, adminDeleteMatch, adminSubmitMatchResult, adminConfirmMatchResult, adminGenerateKnockout, adminGetKnockout, adminAdvanceKnockout, adminSetPlacement, adminFinalizeChampion, adminSetBracketQualification, adminGetBracketQualifications, adminClearBracketQualifications, adminResetBracket } from '@/lib/tournamentApi'
 import { useAuthToken } from '@/lib/hooks/useAuth'
 import { TournamentResponse } from '@/types'
 import LoadingSpinner from '@/components/shared/LoadingSpinner'
@@ -22,7 +22,7 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
   const [groups, setGroups] = useState<any[]>([])
   const [schedule, setSchedule] = useState<any[]>([])
   const [standings, setStandings] = useState<any[]>([])
-  const [knockout, setKnockout] = useState<any[]>([])
+  const [knockout, setKnockout] = useState<{ upper_matches: any[]; lower_matches: any[]; grand_final: any; lower_final: any } | null>(null)
   const [matches, setMatches] = useState<any[]>([])
   const [bracketQualifications, setBracketQualifications] = useState<any[]>([])
   const [showCreateGroup, setShowCreateGroup] = useState(false)
@@ -702,93 +702,64 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
       {activeTab === 'knockout' && (
         <div className="space-y-6">
           <div className="flex flex-wrap gap-2">
-          <button
-            onClick={async () => {
-              if (!token) return
-              try {
-                const qualified = standings.flatMap((group: any) => 
-                  group.standings
-                    .filter((s: any) => s.rank <= 8)
-                    .map((s: any) => s.team_id)
-                )
-                if (qualified.length === 0) {
-                  alert('Tidak ada tim yang lolos kualifikasi')
-                  return
-                }
-                const upperTeams = qualified.slice(0, 4)
-                const lowerTeams = qualified.slice(4, 8)
-                if (upperTeams.length >= 2) {
-                  await adminGenerateKnockout(token, tournamentId, 'UPPER', upperTeams, false)
-                }
-                if (lowerTeams.length >= 2) {
-                  await adminGenerateKnockout(token, tournamentId, 'LOWER', lowerTeams, false)
-                }
-                load()
-              } catch (err) {
-                alert(err instanceof Error ? err.message : 'Gagal generate bracket')
-              }
-            }}
-            className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500"
-          >
-            Generate Bracket
-          </button>
-          <button
-            onClick={async () => {
-              if (!token) return
-              try {
-                const qualified = standings.flatMap((group: any) => 
-                  group.standings
-                    .filter((s: any) => s.rank <= 8)
-                    .map((s: any) => s.team_id)
-                )
-                if (qualified.length === 0) {
-                  alert('Tidak ada tim yang lolos kualifikasi')
-                  return
-                }
-                const upperTeams = qualified.slice(0, 4)
-                const lowerTeams = qualified.slice(4, 8)
-                if (upperTeams.length >= 2) {
-                  await adminGenerateKnockout(token, tournamentId, 'UPPER', upperTeams, true)
-                }
-                if (lowerTeams.length >= 2) {
-                  await adminGenerateKnockout(token, tournamentId, 'LOWER', lowerTeams, true)
-                }
-                load()
-              } catch (err) {
-                alert(err instanceof Error ? err.message : 'Gagal finalize bracket')
-              }
-            }}
-            className="rounded-xl border border-white/10 px-4 py-2 text-sm font-medium text-gray-300 hover:text-white"
-          >
-            Finalize Bracket
-          </button>
             <button
               onClick={async () => {
                 if (!token) return
-                await adminClearBracketQualifications(token, tournamentId)
-                setBracketQualifications([])
-                setMessage('Kualifikasi bracket dihapus')
-                load()
+                try {
+                  const qualified = standings.flatMap((group: any) => 
+                    group.standings
+                      .filter((s: any) => s.rank <= 8)
+                      .map((s: any) => s.team_id)
+                  )
+                  if (qualified.length < 8) {
+                    alert('Butuh tepat 8 tim yang lolos kualifikasi')
+                    return
+                  }
+                  await adminGenerateKnockout(token, tournamentId, qualified, true)
+                  load()
+                } catch (err) {
+                  alert(err instanceof Error ? err.message : 'Gagal generate bracket')
+                }
+              }}
+              className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500"
+            >
+              Generate Bracket
+            </button>
+            <button
+              onClick={async () => {
+                if (!token) return
+                try {
+                  await adminResetBracket(token, tournamentId)
+                  load()
+                } catch (err) {
+                  alert(err instanceof Error ? err.message : 'Gagal reset bracket')
+                }
               }}
               className="rounded-xl border border-white/10 px-4 py-2 text-sm font-medium text-gray-300 hover:text-white"
             >
-              Reset Kualifikasi
+              Reset Bracket
             </button>
           </div>
-          {knockout.length === 0 ? (
+          {!knockout || (knockout.upper_matches?.length === 0 && knockout.lower_matches?.length === 0 && !knockout.grand_final) ? (
             <Card><p className="text-sm text-gray-400">Belum ada bracket.</p></Card>
           ) : (
             <AnimatedBracket
-              upperMatches={knockout.filter((b: any) => b.bracket_type === 'UPPER').flatMap((b: any) => b.rounds?.flatMap((r: any) => r.slots?.map((s: any) => ({ ...s, bracket_type: 'UPPER' as const })) || [])).filter((m: any) => m.team_id)}
-              lowerMatches={knockout.filter((b: any) => b.bracket_type === 'LOWER').flatMap((b: any) => b.rounds?.flatMap((r: any) => r.slots?.map((s: any) => ({ ...s, bracket_type: 'LOWER' as const })) || [])).filter((m: any) => m.team_id)}
-              grandFinal={null}
+              upperMatches={knockout.upper_matches || []}
+              lowerMatches={knockout.lower_matches || []}
+              grandFinal={knockout.grand_final || null}
               token={token}
               tournamentId={tournamentId}
               onMatchUpdate={load}
+              onAdvance={async (matchId: string) => {
+                if (!token) return
+                await adminAdvanceKnockout(token, tournamentId, matchId)
+                load()
+              }}
             />
           )}
         </div>
       )}
+
 
       {activeTab === 'results' && (
         <div className="space-y-4">

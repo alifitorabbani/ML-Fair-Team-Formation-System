@@ -138,6 +138,8 @@ class Match(Base):
     deaths_a = Column(Integer, nullable=True)
     deaths_b = Column(Integer, nullable=True)
     winner_team_id = Column(String, nullable=True, index=True)
+    next_match_id = Column(String, ForeignKey("matches.id", ondelete="SET NULL"), nullable=True, index=True)
+    loser_next_match_id = Column(String, ForeignKey("matches.id", ondelete="SET NULL"), nullable=True, index=True)
     result_image_path = Column(String, nullable=True)
     result_confidence = Column(Float, nullable=True)
     ocr_raw_result_json = Column(Text, nullable=True)
@@ -150,6 +152,8 @@ class Match(Base):
     bracket = relationship("KnockoutBracket", back_populates="matches")
     result_versions = relationship("MatchResultVersion", back_populates="match", cascade="all, delete-orphan")
     map_results = relationship("BracketMatchMap", back_populates="match", cascade="all, delete-orphan")
+    next_match = relationship("Match", foreign_keys=[next_match_id], remote_side=[id])
+    loser_next_match = relationship("Match", foreign_keys=[loser_next_match_id], remote_side=[id])
 
     __table_args__ = (
         Index("ix_matches_tournament_stage", "tournament_id", "stage"),

@@ -318,8 +318,8 @@ export async function adminRecalculateStandings(token: string, tournamentId: str
   return response.json()
 }
 
-export async function adminGenerateKnockout(token: string, tournamentId: string, bracketType: string, qualifiedTeamIds: string[], populateMatches: boolean = false): Promise<any> {
-  const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/knockout/generate?bracket_type=${encodeURIComponent(bracketType)}`, {
+export async function adminGenerateKnockout(token: string, tournamentId: string, qualifiedTeamIds: string[], populateMatches: boolean = true): Promise<any> {
+  const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/knockout/generate`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -334,7 +334,21 @@ export async function adminGenerateKnockout(token: string, tournamentId: string,
   return response.json()
 }
 
-export async function adminGetKnockout(token: string, tournamentId: string): Promise<any[]> {
+export async function adminResetBracket(token: string, tournamentId: string): Promise<any> {
+  const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/knockout/reset`, {
+    method: 'POST',
+    headers: {
+      'X-User-Token': token,
+    },
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to reset bracket')
+  }
+  return response.json()
+}
+
+export async function adminGetKnockout(token: string, tournamentId: string): Promise<BracketResponse> {
   const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/knockout`, {
     headers: { 'X-User-Token': token },
   })
@@ -479,7 +493,7 @@ export async function userGetStandings(token: string, tournamentId: string): Pro
   return response.json()
 }
 
-export async function userGetKnockout(token: string, tournamentId: string): Promise<any[]> {
+export async function userGetKnockout(token: string, tournamentId: string): Promise<BracketResponse> {
   const response = await fetch(`${API_BASE}/api/tournaments/${encodeURIComponent(tournamentId)}/knockout`, {
     headers: { 'X-User-Token': token },
   })

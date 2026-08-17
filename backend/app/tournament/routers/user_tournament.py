@@ -159,8 +159,8 @@ async def get_standings(tournament_id: str, db: AsyncSession = Depends(get_db)):
 @router.get("/{tournament_id}/knockout")
 async def get_knockout(tournament_id: str, db: AsyncSession = Depends(get_db)):
     bracket_service = BracketService(db)
-    brackets = await bracket_service.get_bracket(tournament_id)
-    return brackets
+    bracket_data = await bracket_service.get_bracket(tournament_id)
+    return bracket_data
 
 
 @router.get("/{tournament_id}/results")

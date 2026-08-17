@@ -764,27 +764,23 @@ async def generate_knockout(tournament_id: str, data: Dict[str, Any] = None, x_u
     _ = get_admin_user(x_user_token)
     if not data:
         raise HTTPException(status_code=400, detail="Request body is required")
-    bracket_type = data.get("bracket_type", "UPPER")
     qualified_team_ids = data.get("qualified_team_ids", [])
-    populate_matches = data.get("populate_matches", False)
-    if not qualified_team_ids:
-        raise HTTPException(status_code=400, detail="qualified_team_ids is required")
+    populate_matches = data.get("populate_matches", True)
+    if len(qualified_team_ids) != 8:
+        raise HTTPException(status_code=400, detail=f"Exactly 8 qualified teams required, got {len(qualified_team_ids)}")
     bracket_service = BracketService(db)
     try:
-        bracket = await bracket_service.generate_bracket(
+        result = await bracket_service.generate_bracket(
             tournament_id,
-            bracket_type,
             qualified_team_ids,
             populate_matches=populate_matches,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {
-        "id": bracket.id,
-        "tournament_id": bracket.tournament_id,
-        "name": bracket.name,
-        "bracket_type": bracket.bracket_type,
-        "sort_order": bracket.sort_order,
+        "message": "Bracket generated successfully",
+        "upper_bracket_id": result["upper_bracket"].id,
+        "lower_bracket_id": result["lower_bracket"].id,
     }
 
 
@@ -792,8 +788,8 @@ async def generate_knockout(tournament_id: str, data: Dict[str, Any] = None, x_u
 async def get_knockout(tournament_id: str, x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)):
     _ = get_admin_user(x_user_token)
     bracket_service = BracketService(db)
-    brackets = await bracket_service.get_bracket(tournament_id)
-    return brackets
+    bracket_data = await bracket_service.get_bracket(tournament_id)
+    return bracket_data
 
 
 @router.post("/{tournament_id}/knockout/{match_id}/advance")
@@ -807,6 +803,17 @@ async def advance_knockout(tournament_id: str, match_id: str, x_user_token: Opti
     if not match:
         raise HTTPException(status_code=404, detail="Match not found")
     return {"message": "Winner advanced", "match_id": match.id, "winner_team_id": match.winner_team_id}
+
+
+@router.post("/{tournament_id}/knockout/reset")
+async def reset_bracket(tournament_id: str, x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)):
+    _ = get_admin_user(x_user_token)
+    bracket_service = BracketService(db)
+    try:
+        result = await bracket_service.reset_bracket(tournament_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"message": "Bracket reset successfully"}
 
 
 @router.post("/{tournament_id}/placements/{team_id}", response_model=PlacementResponse)
