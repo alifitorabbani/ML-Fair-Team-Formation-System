@@ -11,6 +11,7 @@ from app.tournament.models.tournament_models import (
     GroupStanding,
 )
 from app.tournament.repositories import (
+    TournamentRepository,
     TournamentGroupRepository,
     TournamentGroupMemberRepository,
     TournamentTeamRepository,
@@ -24,6 +25,7 @@ from app.tournament.services.standings_service import StandingsService
 class GroupService:
     def __init__(self, db: AsyncSession):
         self.db = db
+        self.tournament_repo = TournamentRepository(db)
         self.group_repo = TournamentGroupRepository(db)
         self.group_member_repo = TournamentGroupMemberRepository(db)
         self.team_repo = TournamentTeamRepository(db)
