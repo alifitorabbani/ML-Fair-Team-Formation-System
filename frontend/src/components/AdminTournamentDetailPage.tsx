@@ -46,22 +46,21 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
     try {
       const data = await adminGetTournament(token, tournamentId)
       setTournament(data)
-      const [g, s, st, k, bq, m] = await Promise.all([
+      const [g, s, st, k, bq] = await Promise.all([
         adminGetGroups(token, tournamentId),
         adminGetSchedule(token, tournamentId),
         adminGetStandings(token, tournamentId),
         adminGetKnockout(token, tournamentId),
         adminGetBracketQualifications(token, tournamentId),
-        adminGetSchedule(token, tournamentId),
       ])
       setGroups(g)
       setSchedule(s)
       setStandings(st)
       setKnockout(k)
       setBracketQualifications(bq)
-      setMatches(m)
+      setMatches(s)
       // Load daily standings for the first available date
-      const dates = Array.from(new Set(m.map((match: any) => match.scheduled_date).filter(Boolean)))
+      const dates = Array.from(new Set(s.map((match: any) => match.scheduled_date).filter(Boolean)))
       if (dates.length > 0) {
         const firstDate = dates[0]
         setSelectedDate(firstDate)
@@ -684,14 +683,6 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
                       const winRate = s.played > 0 ? ((s.win / s.played) * 100).toFixed(1) : '0.0'
                       const qualification = bracketQualifications.find((q: any) => q.team_id === s.team_id)
                       const isEliminated = !qualification || !qualification.bracket_type
-                      const bracketColors: Record<string, string> = {
-                        UPPER: 'bg-green-500/10 text-green-300',
-                        LOWER: 'bg-yellow-500/10 text-yellow-300',
-                      }
-                      const bracketLabels: Record<string, string> = {
-                        UPPER: 'Upper',
-                        LOWER: 'Lower',
-                      }
                       return (
                         <tr key={s.team_id} className={`border-b ${isEliminated ? 'bg-red-500/5' : 'border-white/5'}`}>
                           <td className="py-2 pr-4 text-gray-300">{s.rank || '-'}</td>
@@ -870,9 +861,14 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
                     <div className="text-xs text-gray-400">{m.stage} • {m.scheduled_date}</div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span className={`rounded-full px-2 py-1 text-xs font-medium ${m.winner_team_id === m.team_a_id ? 'bg-green-500/10 text-green-300' : 'bg-gray-500/10 text-gray-300'}`}>
+                    <span className={`rounded-full px-2 py-1 text-xs font-medium ${m.winner_team_id ? 'bg-green-500/10 text-green-300' : 'bg-gray-500/10 text-gray-300'}`}>
                       {m.score_a} - {m.score_b}
                     </span>
+                    {m.winner_team_id && (
+                      <span className="text-xs text-green-400">
+                        Win: {m.winner_team_id}
+                      </span>
+                    )}
                   </div>
                 </div>
               </Card>
