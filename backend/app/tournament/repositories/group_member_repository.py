@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
+from sqlalchemy.orm import selectinload
 from typing import Optional, List
 
 from app.tournament.models.tournament_models import TournamentGroup, TournamentGroupMember
@@ -19,6 +20,7 @@ class TournamentGroupMemberRepository:
         result = await self.db.execute(
             select(TournamentGroupMember)
             .where(TournamentGroupMember.group_id == group_id)
+            .options(selectinload(TournamentGroupMember.tournament_team))
             .order_by(TournamentGroupMember.seed)
         )
         return list(result.scalars().all())
