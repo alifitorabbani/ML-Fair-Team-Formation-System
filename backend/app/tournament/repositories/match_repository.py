@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
+from datetime import datetime
 from typing import Optional, List
 
 from app.tournament.models.tournament_models import Match
@@ -23,7 +24,14 @@ class MatchRepository:
         query = select(Match).where(Match.tournament_id == tournament_id)
         if stage:
             query = query.where(Match.stage == stage)
-        result = await self.db.execute(query.order_by(Match.scheduled_date, Match.start_time))
+        # Use coalesce for nullable date/time columns so ordering is stable
+        query = query.order_by(
+            Match.scheduled_date.is_(None),
+            Match.scheduled_date,
+            Match.start_time,
+            Match.match_number,
+        )
+        result = await self.db.execute(query)
         return list(result.scalars().all())
 
     async def update(self, match_id: str, data: dict) -> Optional[Match]:

@@ -568,6 +568,8 @@ class BracketService:
                 "round": m.round,
                 "next_match_id": m.next_match_id,
                 "loser_next_match_id": m.loser_next_match_id,
+                "participant_source_a": getattr(m, "participant_source_a", None),
+                "participant_source_b": getattr(m, "participant_source_b", None),
             }
             
             if m.match_number <= 2:
@@ -602,8 +604,8 @@ class BracketService:
                 grand_final = match_data
         
         # Sort matches by match_number
-        upper_matches.sort(key=lambda x: x.match_number)
-        lower_matches.sort(key=lambda x: x.match_number)
+        upper_matches.sort(key=lambda x: x.get("match_number") or 0)
+        lower_matches.sort(key=lambda x: x.get("match_number") or 0)
         
         return {
             "upper_matches": upper_matches,
