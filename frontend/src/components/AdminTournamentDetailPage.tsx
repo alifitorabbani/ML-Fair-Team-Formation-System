@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { adminGetTournament, adminUpdateTournament, adminGetTournamentTeams, adminGetAvailableTeams, adminCreateGroup, adminUpdateGroup, adminGetGroups, adminClearGroups, adminAutoAssignGroups, adminGenerateSchedule, adminGetSchedule, adminGetStandings, adminRecalculateStandings, adminOverrideStandings, adminCreateMatch, adminUpdateMatch, adminDeleteMatch, adminSubmitMatchResult, adminConfirmMatchResult, adminGenerateKnockout, adminGetKnockout, adminAdvanceKnockout, adminSetPlacement, adminFinalizeChampion, adminSetBracketQualification, adminGetBracketQualifications, adminClearBracketQualifications, adminResetBracket, adminGetDailyStandings } from '@/lib/tournamentApi'
+import { adminUpdateTournament, adminGetTournamentTeams, adminGetAvailableTeams, adminCreateGroup, adminUpdateGroup, adminGetGroups, adminClearGroups, adminAutoAssignGroups, adminGenerateSchedule, adminGetSchedule, adminGetStandings, adminRecalculateStandings, adminOverrideStandings, adminCreateMatch, adminUpdateMatch, adminDeleteMatch, adminSubmitMatchResult, adminConfirmMatchResult, adminGenerateKnockout, adminGetKnockout, adminAdvanceKnockout, adminSetPlacement, adminFinalizeChampion, adminSetBracketQualification, adminGetBracketQualifications, adminClearBracketQualifications, adminResetBracket, adminGetDailyStandings } from '@/lib/tournamentApi'
 import { useAuthToken } from '@/lib/hooks/useAuth'
 import { TournamentResponse } from '@/types'
 import LoadingSpinner from '@/components/shared/LoadingSpinner'
@@ -12,9 +12,10 @@ import AnimatedBracket from './AnimatedBracket'
 
 type Tab = 'config' | 'groups' | 'schedule' | 'matches' | 'standings' | 'knockout' | 'results'
 
-export default function AdminTournamentDetailPage({ tournamentId, onBack }: { tournamentId: string; onBack: () => void }) {
+export default function AdminTournamentDetailPage({ tournament, onBack }: { tournament: TournamentResponse; onBack: () => void }) {
   const token = useAuthToken()
-  const [tournament, setTournament] = useState<TournamentResponse | null>(null)
+  const tournamentId = tournament.id
+  const [tournamentData, setTournamentData] = useState<TournamentResponse | null>(tournament)
   const [activeTab, setActiveTab] = useState<Tab>('config')
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
@@ -45,15 +46,14 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
   const load = async () => {
     if (!token) return
     try {
-      const data = await adminGetTournament(token, tournamentId)
-      setTournament(data)
+      setTournamentData(tournament)
       const [g, s, st, k, bq, t] = await Promise.all([
-        adminGetGroups(token, tournamentId),
-        adminGetSchedule(token, tournamentId),
-        adminGetStandings(token, tournamentId),
-        adminGetKnockout(token, tournamentId),
-        adminGetBracketQualifications(token, tournamentId),
-        adminGetTournamentTeams(token, tournamentId),
+        adminGetGroups(token, tournament.id),
+        adminGetSchedule(token, tournament.id),
+        adminGetStandings(token, tournament.id),
+        adminGetKnockout(token, tournament.id),
+        adminGetBracketQualifications(token, tournament.id),
+        adminGetTournamentTeams(token, tournament.id),
       ])
       const teamMap: Record<string, string> = {}
       t.forEach((team: any) => {
@@ -117,7 +117,7 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
     setMessage(null)
     try {
       const updated = await adminUpdateTournament(token, tournamentId, data)
-      setTournament(updated)
+      setTournamentData(updated)
       setMessage('Berhasil disimpan')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Gagal menyimpan')
@@ -309,6 +309,10 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
     return <div className="flex items-center justify-center py-20"><LoadingSpinner text="Memuat..." /></div>
   }
 
+  if (!tournamentData) {
+    return <div className="flex items-center justify-center py-20"><div className="text-sm text-gray-400">Memuat turnamen...</div></div>
+  }
+
   const tabs: { key: Tab; label: string; icon: any }[] = [
     { key: 'config', label: 'Konfigurasi', icon: Trophy },
     { key: 'groups', label: 'Group', icon: Users },
@@ -325,8 +329,8 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
           <ArrowLeft className="h-4 w-4" />
         </button>
         <div>
-          <h2 className="text-2xl font-bold text-white">{tournament.name}</h2>
-          <p className="mt-1 text-sm text-gray-400">Status: {tournament.status}</p>
+          <h2 className="text-2xl font-bold text-white">{tournamentData.name}</h2>
+          <p className="mt-1 text-sm text-gray-400">Status: {tournamentData.status}</p>
         </div>
       </div>
 
@@ -357,7 +361,7 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
               <label className="mb-1 block text-sm font-medium text-gray-300">Nama</label>
               <input
                 type="text"
-                defaultValue={tournament.name}
+                defaultValue={tournamentData.name}
                 onBlur={(e) => handleUpdate({ name: e.target.value })}
                 className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-4 py-2 text-sm text-white focus:border-brand-500 focus:outline-none"
               />
@@ -365,7 +369,7 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-300">Deskripsi</label>
               <textarea
-                defaultValue={tournament.description || ''}
+                defaultValue={tournamentData.description || ''}
                 onBlur={(e) => handleUpdate({ description: e.target.value })}
                 className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-4 py-2 text-sm text-white focus:border-brand-500 focus:outline-none"
                 rows={3}
@@ -375,7 +379,7 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
               <label className="mb-1 block text-sm font-medium text-gray-300">Timezone</label>
               <input
                 type="text"
-                defaultValue={tournament.timezone}
+                defaultValue={tournamentData.timezone}
                 onBlur={(e) => handleUpdate({ timezone: e.target.value })}
                 className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-4 py-2 text-sm text-white focus:border-brand-500 focus:outline-none"
               />
@@ -383,7 +387,7 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
             <div>
               <label className="mb-1 block text-sm font-medium text-gray-300">Third Place Mode</label>
               <select
-                defaultValue={tournament.third_place_mode}
+                defaultValue={tournamentData.third_place_mode}
                 onChange={(e) => handleUpdate({ third_place_mode: e.target.value })}
                 className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-4 py-2 text-sm text-white focus:border-brand-500 focus:outline-none"
               >

@@ -14,6 +14,7 @@ import AdminTournamentsPage from '@/components/AdminTournamentsPage'
 import AdminTournamentDetailPage from '@/components/AdminTournamentDetailPage'
 import ErrorMessage from '@/components/shared/ErrorMessage'
 import { SystemStateBadge } from '@/components/shared/StatusBadge'
+import { TournamentResponse } from '@/types'
 
 type Page = 'rankings' | 'teams' | 'profile' | 'admin' | 'payment' | 'tournaments' | 'tournament-detail' | 'admin-tournaments' | 'admin-tournament-detail'
 
@@ -38,7 +39,7 @@ export default function Home() {
   const [teamAvailable, setTeamAvailable] = useState(false)
   const [initializing, setInitializing] = useState(true)
   const [selectedTournamentId, setSelectedTournamentId] = useState<string | null>(null)
-  const [selectedAdminTournamentId, setSelectedAdminTournamentId] = useState<string | null>(null)
+  const [selectedAdminTournament, setSelectedAdminTournament] = useState<TournamentResponse | null>(null)
 
   useEffect(() => {
     const init = async () => {
@@ -205,7 +206,7 @@ export default function Home() {
                 <NavButton active={currentPage === 'admin'} onClick={() => setCurrentPage('admin')}>
                   Dashboard Admin
                 </NavButton>
-                <NavButton active={currentPage === 'admin-tournaments'} onClick={() => { setSelectedAdminTournamentId(null); setCurrentPage('admin-tournaments'); }}>
+                <NavButton active={currentPage === 'admin-tournaments'} onClick={() => { setSelectedAdminTournament(null); setCurrentPage('admin-tournaments'); }}>
                   Turnamen
                 </NavButton>
               </>
@@ -243,10 +244,10 @@ export default function Home() {
             />
           )}
           {isAdmin && currentPage === 'admin-tournaments' && (
-            <AdminTournamentsPage onNavigateToDetail={(id) => { setSelectedAdminTournamentId(id); setCurrentPage('admin-tournament-detail'); }} />
+            <AdminTournamentsPage onNavigateToDetail={(tournament) => { setSelectedAdminTournament(tournament); setCurrentPage('admin-tournament-detail'); }} />
           )}
-          {isAdmin && currentPage === 'admin-tournament-detail' && selectedAdminTournamentId && (
-            <AdminTournamentDetailPage tournamentId={selectedAdminTournamentId} onBack={() => setCurrentPage('admin-tournaments')} />
+          {isAdmin && currentPage === 'admin-tournament-detail' && selectedAdminTournament && (
+            <AdminTournamentDetailPage tournament={selectedAdminTournament} onBack={() => { setSelectedAdminTournament(null); setCurrentPage('admin-tournaments'); }} />
           )}
           {currentPage === 'rankings' && <RankingsPage />}
           {currentPage === 'teams' && (

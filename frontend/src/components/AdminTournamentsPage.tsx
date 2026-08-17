@@ -9,7 +9,7 @@ import ErrorMessage from '@/components/shared/ErrorMessage'
 import Card from '@/components/shared/Card'
 import { Plus, Trash2, Trophy } from 'lucide-react'
 
-export default function AdminTournamentsPage({ onNavigateToDetail }: { onNavigateToDetail: (id: string) => void }) {
+export default function AdminTournamentsPage({ onNavigateToDetail }: { onNavigateToDetail: (tournament: TournamentResponse) => void }) {
   const token = useAuthToken()
   const [tournaments, setTournaments] = useState<TournamentResponse[]>([])
   const [loading, setLoading] = useState(true)
@@ -147,7 +147,7 @@ export default function AdminTournamentsPage({ onNavigateToDetail }: { onNavigat
               </div>
               <div className="mt-4 flex items-center gap-2">
                 <button
-                  onClick={() => onNavigateToDetail(t.id)}
+                  onClick={() => onNavigateToDetail(t)}
                   className="flex items-center gap-1 rounded-xl bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-500"
                 >
                   <Trophy className="h-3 w-3" />
