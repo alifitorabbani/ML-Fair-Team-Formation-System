@@ -708,6 +708,26 @@ async def recalculate_standings(tournament_id: str, x_user_token: Optional[str] 
     return results
 
 
+@router.get("/{tournament_id}/standings/daily")
+async def get_daily_standings(tournament_id: str, match_date: str, group_id: Optional[str] = None, x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)):
+    _ = get_admin_user(x_user_token)
+    from app.tournament.services.standings_service import StandingsService
+    service = StandingsService(db)
+    target_group_id = group_id
+    if not target_group_id:
+        groups = await GroupService(db).list_groups(tournament_id)
+        if groups:
+            target_group_id = groups[0].id
+    if not target_group_id:
+        raise HTTPException(status_code=404, detail="Group not found")
+    standings = await service.recalculate_daily_standings(tournament_id, target_group_id, match_date)
+    return {
+        "group_id": target_group_id,
+        "match_date": match_date,
+        "standings": standings,
+    }
+
+
 @router.post("/{tournament_id}/bracket-qualifications")
 async def set_bracket_qualification(tournament_id: str, data: BracketQualificationCreate, x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)):
     _ = get_admin_user(x_user_token)

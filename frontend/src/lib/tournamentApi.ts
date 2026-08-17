@@ -290,6 +290,34 @@ export async function adminGetStandings(token: string, tournamentId: string): Pr
   return response.json()
 }
 
+export async function adminGetDailyStandings(token: string, tournamentId: string, matchDate: string, groupId?: string): Promise<any> {
+  const url = new URL(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/standings/daily`)
+  url.searchParams.set('match_date', matchDate)
+  if (groupId) url.searchParams.set('group_id', groupId)
+  const response = await fetch(url.toString(), {
+    headers: { 'X-User-Token': token },
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to fetch daily standings')
+  }
+  return response.json()
+}
+
+export async function userGetDailyStandings(token: string, tournamentId: string, matchDate: string, groupId?: string): Promise<any> {
+  const url = new URL(`${API_BASE}/api/tournaments/${encodeURIComponent(tournamentId)}/standings/daily`)
+  url.searchParams.set('match_date', matchDate)
+  if (groupId) url.searchParams.set('group_id', groupId)
+  const response = await fetch(url.toString(), {
+    headers: { 'X-User-Token': token },
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to fetch daily standings')
+  }
+  return response.json()
+}
+
 export async function adminOverrideStandings(token: string, tournamentId: string, data: any[]): Promise<any[]> {
   const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/standings/override`, {
     method: 'PATCH',

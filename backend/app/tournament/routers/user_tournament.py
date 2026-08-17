@@ -156,6 +156,26 @@ async def get_standings(tournament_id: str, db: AsyncSession = Depends(get_db)):
     return results
 
 
+@router.get("/{tournament_id}/standings/daily")
+async def get_daily_standings(tournament_id: str, match_date: str, group_id: Optional[str] = None, db: AsyncSession = Depends(get_db)):
+    from app.tournament.services.standings_service import StandingsService
+    service = StandingsService(db)
+    group_service = GroupService(db)
+    target_group_id = group_id
+    if not target_group_id:
+        groups = await group_service.list_groups(tournament_id)
+        if groups:
+            target_group_id = groups[0].id
+    if not target_group_id:
+        raise HTTPException(status_code=404, detail="Group not found")
+    standings = await service.recalculate_daily_standings(tournament_id, target_group_id, match_date)
+    return {
+        "group_id": target_group_id,
+        "match_date": match_date,
+        "standings": standings,
+    }
+
+
 @router.get("/{tournament_id}/knockout")
 async def get_knockout(tournament_id: str, db: AsyncSession = Depends(get_db)):
     bracket_service = BracketService(db)
