@@ -544,17 +544,20 @@ class BracketService:
 
     async def get_bracket(self, tournament_id: str) -> Dict[str, Any]:
         """Get bracket data for frontend visualization."""
-        all_matches = await self.match_repo.get_by_tournament(tournament_id, MatchStage.KNOCKOUT)
-        
+        try:
+            all_matches = await self.match_repo.get_by_tournament(tournament_id, MatchStage.KNOCKOUT)
+        except Exception as e:
+            raise ValueError(f"Failed to load knockout matches: {e}")
+
         upper_matches = []
         lower_matches = []
         grand_final = None
         lower_final = None
-        
+
         for m in all_matches:
             if m.match_number is None:
                 continue
-            
+
             match_data = {
                 "id": m.id,
                 "match_number": m.match_number,
@@ -571,7 +574,7 @@ class BracketService:
                 "participant_source_a": getattr(m, "participant_source_a", None),
                 "participant_source_b": getattr(m, "participant_source_b", None),
             }
-            
+
             if m.match_number <= 2:
                 match_data["bracket_type"] = "UPPER"
                 match_data["round"] = 1
@@ -602,11 +605,11 @@ class BracketService:
                 match_data["bracket_type"] = "GRAND_FINAL"
                 match_data["is_grand_final"] = True
                 grand_final = match_data
-        
+
         # Sort matches by match_number
         upper_matches.sort(key=lambda x: x.get("match_number") or 0)
         lower_matches.sort(key=lambda x: x.get("match_number") or 0)
-        
+
         return {
             "upper_matches": upper_matches,
             "lower_matches": lower_matches,

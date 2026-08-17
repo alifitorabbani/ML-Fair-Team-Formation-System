@@ -12,6 +12,15 @@ import AnimatedBracket from './AnimatedBracket'
 
 type Tab = 'config' | 'groups' | 'schedule' | 'matches' | 'standings' | 'knockout' | 'results'
 
+function groupScheduleByStage(matches: any[]): Record<string, any[]> {
+  return matches.reduce<Record<string, any[]>>((acc, m) => {
+    const stage = m.stage || 'GROUP_STAGE'
+    if (!acc[stage]) acc[stage] = []
+    acc[stage].push(m)
+    return acc
+  }, {})
+}
+
 export default function AdminTournamentDetailPage({ tournament, onBack }: { tournament: TournamentResponse; onBack: () => void }) {
   const token = useAuthToken()
   const tournamentId = tournament.id
@@ -423,109 +432,181 @@ export default function AdminTournamentDetailPage({ tournament, onBack }: { tour
       )}
 
       {activeTab === 'groups' && (
-        <div className="space-y-6">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h3 className="text-lg font-semibold text-white">Kelola Group</h3>
-            <div className="flex flex-wrap gap-2">
-              {!showCreateGroup && (
-                <button
-                  onClick={() => setShowCreateGroup(true)}
-                  className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500"
-                >
-                  + Buat Group
-                </button>
-              )}
-              {groups.length > 0 && (
-                <button
-                  onClick={async () => {
-                    if (!token) return
-                    if (!confirm('Hapus semua group dan isinya?')) return
-                    try {
-                      await adminClearGroups(token, tournamentId)
-                      load()
-                    } catch (err) {
-                      alert(err instanceof Error ? err.message : 'Gagal mengosongkan group')
-                    }
-                  }}
-                  className="rounded-xl border border-white/10 px-4 py-2 text-sm font-medium text-gray-300 hover:text-white"
-                >
-                  Kosongkan Semua Group
-                </button>
-              )}
-              {groups.length > 0 && (
-                <button
-                  onClick={async () => {
-                    if (!token) return
-                    try {
-                      await adminAutoAssignGroups(token, tournamentId)
-                      load()
-                    } catch (err) {
-                      alert(err instanceof Error ? err.message : 'Gagal mengisi group otomatis')
-                    }
-                  }}
-                  className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500"
-                >
-                  Auto-Isi Group
-                </button>
-              )}
+        <div className="space-y-8">
+          {/* GROUP STAGE SECTION */}
+          <div>
+            <h3 className="mb-4 text-lg font-semibold text-blue-300">Group Stage</h3>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap gap-2">
+                {!showCreateGroup && (
+                  <button
+                    onClick={() => setShowCreateGroup(true)}
+                    className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500"
+                  >
+                    + Buat Group
+                  </button>
+                )}
+                {groups.length > 0 && (
+                  <button
+                    onClick={async () => {
+                      if (!token) return
+                      if (!confirm('Hapus semua group dan isinya?')) return
+                      try {
+                        await adminClearGroups(token, tournamentId)
+                        load()
+                      } catch (err) {
+                        alert(err instanceof Error ? err.message : 'Gagal mengosongkan group')
+                      }
+                    }}
+                    className="rounded-xl border border-white/10 px-4 py-2 text-sm font-medium text-gray-300 hover:text-white"
+                  >
+                    Kosongkan Semua Group
+                  </button>
+                )}
+                {groups.length > 0 && (
+                  <button
+                    onClick={async () => {
+                      if (!token) return
+                      try {
+                        await adminAutoAssignGroups(token, tournamentId)
+                        load()
+                      } catch (err) {
+                        alert(err instanceof Error ? err.message : 'Gagal mengisi group otomatis')
+                      }
+                    }}
+                    className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500"
+                  >
+                    Auto-Isi Group
+                  </button>
+                )}
+              </div>
             </div>
+
+            {showCreateGroup && (
+              <Card>
+                <div className="space-y-4">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-300">Nama Group</label>
+                    <input
+                      type="text"
+                      value={newGroupName}
+                      onChange={(e) => setNewGroupName(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleCreateGroup()}
+                      className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-4 py-2 text-sm text-white placeholder-gray-500 focus:border-brand-500 focus:outline-none"
+                      placeholder="Contoh: Group A"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleCreateGroup}
+                      disabled={creatingGroup || !newGroupName.trim()}
+                      className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500 disabled:opacity-50"
+                    >
+                      {creatingGroup ? 'Menyimpan...' : 'Buat Group'}
+                    </button>
+                    <button
+                      onClick={() => { setShowCreateGroup(false); setNewGroupName('') }}
+                      className="rounded-xl border border-white/10 px-4 py-2 text-sm text-gray-400 hover:text-white"
+                    >
+                      Batal
+                    </button>
+                  </div>
+                  {groupError && <p className="text-xs text-red-400">{groupError}</p>}
+                </div>
+              </Card>
+            )}
+
+            {groups.length === 0 ? (
+              <Card>
+                <p className="text-sm text-gray-400">Belum ada group. Klik "Buat Group" untuk membuat group baru.</p>
+              </Card>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2">
+                {groups.map((group: any) => (
+                  <GroupCard
+                    key={group.id}
+                    token={token}
+                    tournamentId={tournamentId}
+                    group={group}
+                    onUpdated={load}
+                  />
+                ))}
+              </div>
+            )}
           </div>
 
-          {showCreateGroup && (
-            <Card>
+          {/* KLASEMEN SECTION */}
+          <div>
+            <h3 className="mb-4 text-lg font-semibold text-brand-300">Klasemen</h3>
+            {standings.length === 0 ? (
+              <Card><p className="text-sm text-gray-400">Belum ada data klasemen.</p></Card>
+            ) : (
               <div className="space-y-4">
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-300">Nama Group</label>
-                  <input
-                    type="text"
-                    value={newGroupName}
-                    onChange={(e) => setNewGroupName(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleCreateGroup()}
-                    className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-4 py-2 text-sm text-white placeholder-gray-500 focus:border-brand-500 focus:outline-none"
-                    placeholder="Contoh: Group A"
-                    autoFocus
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleCreateGroup}
-                    disabled={creatingGroup || !newGroupName.trim()}
-                    className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500 disabled:opacity-50"
-                  >
-                    {creatingGroup ? 'Menyimpan...' : 'Buat Group'}
-                  </button>
-                  <button
-                    onClick={() => { setShowCreateGroup(false); setNewGroupName('') }}
-                    className="rounded-xl border border-white/10 px-4 py-2 text-sm text-gray-400 hover:text-white"
-                  >
-                    Batal
-                  </button>
-                </div>
-                {groupError && <p className="text-xs text-red-400">{groupError}</p>}
+                {standings.map((group: any) => (
+                  <Card key={group.group_id}>
+                    <h4 className="mb-3 text-base font-semibold text-white">{group.group_name}</h4>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-white/10 text-left text-xs text-gray-400">
+                            <th className="pb-2 pr-4">#</th>
+                            <th className="pb-2 pr-4">Tim</th>
+                            <th className="pb-2 pr-4">P</th>
+                            <th className="pb-2 pr-4">W</th>
+                            <th className="pb-2 pr-4">L</th>
+                            <th className="pb-2 pr-4">K</th>
+                            <th className="pb-2 pr-4">D</th>
+                            <th className="pb-2 pr-4">KD</th>
+                            <th className="pb-2 pr-4">WR</th>
+                            <th className="pb-2 pr-4">Bracket</th>
+                            <th className="pb-2">Pts</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {group.standings.map((s: any) => {
+                            const winRate = s.played > 0 ? ((s.win / s.played) * 100).toFixed(1) : '0.0'
+                            const qualification = bracketQualifications.find((q: any) => q.team_id === s.team_id && q.group_id === group.group_id)
+                            const rank = s.rank || 999
+                            const isUpper = rank >= 1 && rank <= 4
+                            const isLower = rank >= 5 && rank <= 8
+                            const isEliminated = rank > 8
+                            const rowClass = isUpper ? 'bg-blue-500/5 border-blue-500/10' : isLower ? 'bg-green-500/5 border-green-500/10' : isEliminated ? 'bg-red-500/5 border-red-500/10' : 'border-white/5'
+                            const nameClass = isUpper ? 'text-blue-300' : isLower ? 'text-green-300' : isEliminated ? 'text-red-300' : 'text-white'
+                            return (
+                              <tr key={s.team_id} className={`border-b ${rowClass}`}>
+                                <td className="py-2 pr-4 text-gray-300">{s.rank || '-'}</td>
+                                <td className={`py-2 pr-4 ${nameClass}`}>{s.team_name || s.team_id}</td>
+                                <td className="py-2 pr-4 text-gray-300">{s.played}</td>
+                                <td className="py-2 pr-4 text-green-400">{s.win}</td>
+                                <td className="py-2 pr-4 text-red-400">{s.loss}</td>
+                                <td className="py-2 pr-4 text-gray-300">{s.kill}</td>
+                                <td className="py-2 pr-4 text-gray-300">{s.death}</td>
+                                <td className="py-2 pr-4 text-gray-300">{s.kill_difference > 0 ? '+' : ''}{s.kill_difference}</td>
+                                <td className="py-2 pr-4 text-gray-300">{winRate}%</td>
+                                <td className="py-2 pr-4">
+                                  <span className={`rounded-full px-2 py-1 text-xs font-medium ${
+                                    isUpper ? 'bg-blue-500/10 text-blue-300' :
+                                    isLower ? 'bg-green-500/10 text-green-300' :
+                                    isEliminated ? 'bg-red-500/10 text-red-300' : 'bg-gray-500/10 text-gray-300'
+                                  }`}>
+                                    {isUpper ? 'Upper' : isLower ? 'Lower' : isEliminated ? 'Eliminated' : '-'}
+                                  </span>
+                                </td>
+                                <td className="py-2 font-semibold text-white">{s.points}</td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Card>
+                ))}
               </div>
-            </Card>
-          )}
-
-          {groups.length === 0 ? (
-            <Card>
-              <p className="text-sm text-gray-400">Belum ada group. Klik "Buat Group" untuk membuat group baru.</p>
-            </Card>
-          ) : (
-            <div className="grid gap-4 md:grid-cols-2">
-              {groups.map((group: any) => (
-                <GroupCard
-                  key={group.id}
-                  token={token}
-                  tournamentId={tournamentId}
-                  group={group}
-                  onUpdated={load}
-                />
-              ))}
-            </div>
-          )}
+            )}
+          </div>
         </div>
       )}
-
       {activeTab === 'schedule' && (
         <div className="space-y-4">
           <div className="flex flex-wrap gap-2">
@@ -617,162 +698,172 @@ export default function AdminTournamentDetailPage({ tournament, onBack }: { tour
           {schedule.length === 0 ? (
             <Card><p className="text-sm text-gray-400">Belum ada jadwal.</p></Card>
           ) : (
-            <div className="space-y-2">
-              {schedule.map((m) => {
-                const result = matchResults[m.id] || { score_a: 0, score_b: 0, kills_a: 0, kills_b: 0, deaths_a: 0, deaths_b: 0 }
-                const isCompleted = m.status === 'COMPLETED'
+            <div className="space-y-6">
+              {Object.entries(groupScheduleByStage(schedule)).map(([stage, stageMatches]) => {
+                const stageLabel = stage === 'GROUP_STAGE' ? 'GROUP STAGE' : 'BRACKET'
+                const stageColor = stage === 'GROUP_STAGE' ? 'text-blue-300' : 'text-brand-300'
                 return (
-                  <Card key={m.id}>
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <div className="text-sm font-medium text-white">{getTeamName(m.team_a_id)} vs {getTeamName(m.team_b_id)}</div>
-                        <div className="text-xs text-gray-400">{m.scheduled_date} • {m.start_time} - {m.end_time} • {m.format}</div>
-                      </div>
-                      <span className={`rounded-full px-2 py-1 text-xs font-medium ${isCompleted ? 'bg-green-500/10 text-green-300' : 'bg-gray-500/10 text-gray-300'}`}>
-                        {m.status}
-                      </span>
-                    </div>
-                    {isCompleted && (
-                      <div className="mt-2 text-sm font-semibold text-white">
-                        {m.score_a} - {m.score_b}
-                        {m.winner_team_id && <span className="ml-2 text-green-400">Win: {m.winner_team_id}</span>}
-                        <span className="ml-2 text-gray-400">K: {m.kills_a}-{m.kills_b} D: {m.deaths_a}-{m.deaths_b}</span>
-                      </div>
-                    )}
-                    {!isCompleted && (
-                      <div className="mt-3 space-y-2">
-                        <div className="grid gap-2 md:grid-cols-2">
-                          <div>
-                            <label className="mb-1 block text-xs text-gray-400">Score {getTeamName(m.team_a_id)}</label>
-                            <input
-                              type="number"
-                              min={0}
-                              value={result.score_a}
-                              onChange={(e) => updateMatchResult(m.id, 'score_a', parseInt(e.target.value || '0', 10))}
-                              className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
-                            />
-                          </div>
-                          <div>
-                            <label className="mb-1 block text-xs text-gray-400">Score {getTeamName(m.team_b_id)}</label>
-                            <input
-                              type="number"
-                              min={0}
-                              value={result.score_b}
-                              onChange={(e) => updateMatchResult(m.id, 'score_b', parseInt(e.target.value || '0', 10))}
-                              className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
-                            />
-                          </div>
-                          <div>
-                            <label className="mb-1 block text-xs text-gray-400">Kills {getTeamName(m.team_a_id)}</label>
-                            <input
-                              type="number"
-                              min={0}
-                              value={result.kills_a}
-                              onChange={(e) => updateMatchResult(m.id, 'kills_a', parseInt(e.target.value || '0', 10))}
-                              className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
-                            />
-                          </div>
-                          <div>
-                            <label className="mb-1 block text-xs text-gray-400">Kills {getTeamName(m.team_b_id)}</label>
-                            <input
-                              type="number"
-                              min={0}
-                              value={result.kills_b}
-                              onChange={(e) => updateMatchResult(m.id, 'kills_b', parseInt(e.target.value || '0', 10))}
-                              className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
-                            />
-                          </div>
-                          <div>
-                            <label className="mb-1 block text-xs text-gray-400">Deaths {getTeamName(m.team_a_id)}</label>
-                            <input
-                              type="number"
-                              min={0}
-                              value={result.deaths_a}
-                              onChange={(e) => updateMatchResult(m.id, 'deaths_a', parseInt(e.target.value || '0', 10))}
-                              className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
-                            />
-                           </div>
-                           <div>
-                             <label className="mb-1 block text-xs text-gray-400">Deaths {getTeamName(m.team_b_id)}</label>
-                             <input
-                               type="number"
-                               min={0}
-                               value={result.deaths_b}
-                               onChange={(e) => updateMatchResult(m.id, 'deaths_b', parseInt(e.target.value || '0', 10))}
-                               className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
-                             />
-                           </div>
-                         </div>
-                         <div className="grid gap-2 md:grid-cols-2">
-                           <div>
-                             <label className="mb-1 block text-xs text-gray-400">Winner</label>
-                             <select
-                               value={result.winner_team_id || ''}
-                               onChange={(e) => updateMatchResult(m.id, 'winner_team_id', e.target.value)}
-                               className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
-                             >
-                               <option value="">- Pilih Winner -</option>
-                               <option value={m.team_a_id}>{getTeamName(m.team_a_id)}</option>
-                               <option value={m.team_b_id}>{getTeamName(m.team_b_id)}</option>
-                             </select>
-                           </div>
-                           <div>
-                             <label className="mb-1 block text-xs text-gray-400">Loser</label>
-                             <select
-                               value={result.loser_team_id || ''}
-                               onChange={(e) => updateMatchResult(m.id, 'loser_team_id', e.target.value)}
-                               className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
-                             >
-                               <option value="">- Pilih Loser -</option>
-                               <option value={m.team_a_id}>{getTeamName(m.team_a_id)}</option>
-                               <option value={m.team_b_id}>{getTeamName(m.team_b_id)}</option>
-                             </select>
+                  <div key={stage}>
+                    <h3 className={`mb-2 text-lg font-semibold ${stageColor}`}>{stageLabel}</h3>
+                    <div className="space-y-2">
+                      {stageMatches.map((m: any) => {
+                        const result = matchResults[m.id] || { score_a: 0, score_b: 0, kills_a: 0, kills_b: 0, deaths_a: 0, deaths_b: 0 }
+                        const isCompleted = m.status === 'COMPLETED'
+                        return (
+                          <Card key={m.id}>
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div>
+                                <div className="text-sm font-medium text-white">{getTeamName(m.team_a_id)} vs {getTeamName(m.team_b_id)}</div>
+                                <div className="text-xs text-gray-400">{m.scheduled_date || '—'} • {m.start_time || '—'} - {m.end_time || '—'} • {m.format}</div>
+                              </div>
+                              <span className={`rounded-full px-2 py-1 text-xs font-medium ${isCompleted ? 'bg-green-500/10 text-green-300' : 'bg-gray-500/10 text-gray-300'}`}>
+                                {m.status}
+                              </span>
                             </div>
-                          </div>
-                          {m.format !== 'BO1' && (
-                            <div className="space-y-1">
-                              <label className="mb-1 block text-xs text-gray-400">Hasil Map</label>
-                              {Array.from({ length: Math.min((m.format === 'BO3' ? 2 : m.format === 'BO5' ? 3 : m.format === 'BO7' ? 4 : 1) * 2 - 1, 7) }, (_, i) => {
-                                const mapResult = (bracketMapResults[m.id] || []).find((r) => r.map_number === i + 1)
-                                return (
-                                  <div key={i} className="flex items-center justify-between rounded-lg border border-white/10 bg-surface-900/40 px-3 py-2">
-                                    <span className="text-xs text-gray-400">Map {i + 1}</span>
-                                  <select
-                                    value={mapResult?.winner_team_id || ''}
-                                    onChange={(e) => {
-                                      const value = e.target.value
-                                      if (value) {
-                                        updateBracketMapResult(m.id, i + 1, value)
-                                      }
-                                    }}
-                                    className="rounded-lg border border-white/10 bg-surface-900/60 px-2 py-1 text-xs text-white focus:border-brand-500 focus:outline-none"
-                                  >
-                                      <option value="">- Pilih Winner -</option>
-                                      <option value={m.team_a_id}>{getTeamName(m.team_a_id)}</option>
-                                      <option value={m.team_b_id}>{getTeamName(m.team_b_id)}</option>
-                                    </select>
+                            {isCompleted && (
+                              <div className="mt-2 text-sm font-semibold text-white">
+                                {m.score_a} - {m.score_b}
+                                {m.winner_team_id && <span className="ml-2 text-green-400">Win: {getTeamName(m.winner_team_id)}</span>}
+                                <span className="ml-2 text-gray-400">K: {m.kills_a}-{m.kills_b} D: {m.deaths_a}-{m.deaths_b}</span>
+                              </div>
+                            )}
+                            {!isCompleted && (
+                              <div className="mt-3 space-y-2">
+                                <div className="grid gap-2 md:grid-cols-2">
+                                  <div>
+                                    <label className="mb-1 block text-xs text-gray-400">Score {getTeamName(m.team_a_id)}</label>
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      value={result.score_a}
+                                      onChange={(e) => updateMatchResult(m.id, 'score_a', parseInt(e.target.value || '0', 10))}
+                                      className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
+                                    />
                                   </div>
-                                )
-                              })}
-                            </div>
-                          )}
-                          <button
-                            onClick={() => handleSubmitMatchResult(m.id, m.format)}
-                            disabled={saving}
-                            className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500 disabled:opacity-50"
-                          >
-                            {saving ? 'Menyimpan...' : 'Simpan Hasil'}
-                          </button>
-                        </div>
-                      )}
-                   </Card>
-                 )
-               })}
+                                  <div>
+                                    <label className="mb-1 block text-xs text-gray-400">Score {getTeamName(m.team_b_id)}</label>
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      value={result.score_b}
+                                      onChange={(e) => updateMatchResult(m.id, 'score_b', parseInt(e.target.value || '0', 10))}
+                                      className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="mb-1 block text-xs text-gray-400">Kills {getTeamName(m.team_a_id)}</label>
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      value={result.kills_a}
+                                      onChange={(e) => updateMatchResult(m.id, 'kills_a', parseInt(e.target.value || '0', 10))}
+                                      className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="mb-1 block text-xs text-gray-400">Kills {getTeamName(m.team_b_id)}</label>
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      value={result.kills_b}
+                                      onChange={(e) => updateMatchResult(m.id, 'kills_b', parseInt(e.target.value || '0', 10))}
+                                      className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="mb-1 block text-xs text-gray-400">Deaths {getTeamName(m.team_a_id)}</label>
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      value={result.deaths_a}
+                                      onChange={(e) => updateMatchResult(m.id, 'deaths_a', parseInt(e.target.value || '0', 10))}
+                                      className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
+                                    />
+                                   </div>
+                                   <div>
+                                     <label className="mb-1 block text-xs text-gray-400">Deaths {getTeamName(m.team_b_id)}</label>
+                                     <input
+                                       type="number"
+                                       min={0}
+                                       value={result.deaths_b}
+                                       onChange={(e) => updateMatchResult(m.id, 'deaths_b', parseInt(e.target.value || '0', 10))}
+                                       className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
+                                     />
+                                    </div>
+                                  </div>
+                                  <div className="grid gap-2 md:grid-cols-2">
+                                    <div>
+                                      <label className="mb-1 block text-xs text-gray-400">Winner</label>
+                                      <select
+                                        value={result.winner_team_id || ''}
+                                        onChange={(e) => updateMatchResult(m.id, 'winner_team_id', e.target.value)}
+                                        className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
+                                      >
+                                        <option value="">- Pilih Winner -</option>
+                                        <option value={m.team_a_id}>{getTeamName(m.team_a_id)}</option>
+                                        <option value={m.team_b_id}>{getTeamName(m.team_b_id)}</option>
+                                      </select>
+                                    </div>
+                                    <div>
+                                      <label className="mb-1 block text-xs text-gray-400">Loser</label>
+                                      <select
+                                        value={result.loser_team_id || ''}
+                                        onChange={(e) => updateMatchResult(m.id, 'loser_team_id', e.target.value)}
+                                        className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
+                                      >
+                                        <option value="">- Pilih Loser -</option>
+                                        <option value={m.team_a_id}>{getTeamName(m.team_a_id)}</option>
+                                        <option value={m.team_b_id}>{getTeamName(m.team_b_id)}</option>
+                                      </select>
+                                    </div>
+                                  </div>
+                                  {m.format !== 'BO1' && (
+                                    <div className="space-y-1">
+                                      <label className="mb-1 block text-xs text-gray-400">Hasil Map</label>
+                                      {Array.from({ length: Math.min((m.format === 'BO3' ? 2 : m.format === 'BO5' ? 3 : m.format === 'BO7' ? 4 : 1) * 2 - 1, 7) }, (_, i) => {
+                                        const mapResult = (bracketMapResults[m.id] || []).find((r) => r.map_number === i + 1)
+                                        return (
+                                          <div key={i} className="flex items-center justify-between rounded-lg border border-white/10 bg-surface-900/40 px-3 py-2">
+                                            <span className="text-xs text-gray-400">Map {i + 1}</span>
+                                            <select
+                                              value={mapResult?.winner_team_id || ''}
+                                              onChange={(e) => {
+                                                const value = e.target.value
+                                                if (value) {
+                                                  updateBracketMapResult(m.id, i + 1, value)
+                                                }
+                                              }}
+                                              className="rounded-lg border border-white/10 bg-surface-900/60 px-2 py-1 text-xs text-white focus:border-brand-500 focus:outline-none"
+                                            >
+                                              <option value="">- Pilih Winner -</option>
+                                              <option value={m.team_a_id}>{getTeamName(m.team_a_id)}</option>
+                                              <option value={m.team_b_id}>{getTeamName(m.team_b_id)}</option>
+                                            </select>
+                                          </div>
+                                        )
+                                      })}
+                                    </div>
+                                  )}
+                                  <button
+                                    onClick={() => handleSubmitMatchResult(m.id, m.format)}
+                                    disabled={saving}
+                                    className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500 disabled:opacity-50"
+                                  >
+                                    {saving ? 'Menyimpan...' : 'Simpan Hasil'}
+                                  </button>
+                                </div>
+                              )}
+                            </Card>
+                          )
+                        })}
+                      </div>
+                    </div>
+                )
+              })}
             </div>
           )}
         </div>
       )}
-
       {activeTab === 'matches' && (
         <div className="space-y-4">
           {matches.length === 0 ? (
@@ -1165,10 +1256,16 @@ function GroupCard({ token, tournamentId, group, onUpdated }: { token: string | 
                 <tbody>
                   {standings.map((s: any) => {
                     const winRate = s.played > 0 ? ((s.win / s.played) * 100).toFixed(1) : '0.0'
+                    const rank = s.rank || 999
+                    const isUpper = rank >= 1 && rank <= 4
+                    const isLower = rank >= 5 && rank <= 8
+                    const isEliminated = rank > 8
+                    const rowClass = isUpper ? 'bg-blue-500/5' : isLower ? 'bg-green-500/5' : isEliminated ? 'bg-red-500/5' : ''
+                    const nameClass = isUpper ? 'text-blue-300' : isLower ? 'text-green-300' : isEliminated ? 'text-red-300' : 'text-white'
                     return (
-                      <tr key={s.team_id} className="border-b border-white/5">
+                      <tr key={s.team_id} className={`border-b border-white/5 ${rowClass}`}>
                         <td className="py-1 pr-2 text-gray-300">{s.rank || '-'}</td>
-                        <td className="py-1 pr-2 text-white">{s.team_name || s.team_id}</td>
+                        <td className={`py-1 pr-2 ${nameClass}`}>{s.team_name || s.team_id}</td>
                         <td className="py-1 pr-2 text-gray-300">{s.played}</td>
                         <td className="py-1 pr-2 text-green-400">{s.win}</td>
                         <td className="py-1 pr-2 text-red-400">{s.loss}</td>
@@ -1176,7 +1273,7 @@ function GroupCard({ token, tournamentId, group, onUpdated }: { token: string | 
                         <td className="py-1 pr-2 text-gray-300">{s.death}</td>
                         <td className="py-1 pr-2 text-gray-300">{s.kill_difference > 0 ? '+' : ''}{s.kill_difference}</td>
                         <td className="py-1 pr-2 text-gray-300">{winRate}%</td>
-                        <td className="py-1 font-semibold text-white">{s.points}</td>
+                        <td className={`py-1 font-semibold ${isUpper ? 'text-blue-300' : isLower ? 'text-green-300' : isEliminated ? 'text-red-300' : 'text-white'}`}>{s.points}</td>
                       </tr>
                     )
                   })}
