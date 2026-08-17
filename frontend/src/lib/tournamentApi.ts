@@ -43,8 +43,14 @@ export async function adminGetTournament(token: string, tournamentId: string): P
     headers: { 'X-User-Token': token },
   })
   if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Failed to fetch tournament')
+    let errorMessage = 'Failed to fetch tournament'
+    try {
+      const error = await response.json()
+      errorMessage = error.detail || errorMessage
+    } catch {
+      errorMessage = `Server error (${response.status})`
+    }
+    throw new Error(errorMessage)
   }
   return response.json()
 }
