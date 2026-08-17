@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { adminGetTournament, adminUpdateTournament, adminSelectTeams, adminCreateGroup, adminUpdateGroup, adminGenerateSchedule, adminGetSchedule, adminGetStandings, adminRecalculateStandings, adminOverrideStandings, adminCreateMatch, adminUpdateMatch, adminDeleteMatch, adminSubmitMatchResult, adminConfirmMatchResult, adminGenerateKnockout, adminGetKnockout, adminAdvanceKnockout, adminSetPlacement, adminFinalizeChampion } from '@/lib/tournamentApi'
+import { adminGetTournament, adminUpdateTournament, adminSelectTeams, adminCreateGroup, adminUpdateGroup, adminGetGroups, adminGenerateSchedule, adminGetSchedule, adminGetStandings, adminRecalculateStandings, adminOverrideStandings, adminCreateMatch, adminUpdateMatch, adminDeleteMatch, adminSubmitMatchResult, adminConfirmMatchResult, adminGenerateKnockout, adminGetKnockout, adminAdvanceKnockout, adminSetPlacement, adminFinalizeChampion } from '@/lib/tournamentApi'
 import { useAuthToken } from '@/lib/hooks/useAuth'
 import { TournamentResponse } from '@/types'
 import LoadingSpinner from '@/components/shared/LoadingSpinner'
@@ -29,11 +29,13 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
     try {
       const data = await adminGetTournament(token, tournamentId)
       setTournament(data)
-      const [s, st, k] = await Promise.all([
+      const [g, s, st, k] = await Promise.all([
+        adminGetGroups(token, tournamentId),
         adminGetSchedule(token, tournamentId),
         adminGetStandings(token, tournamentId),
         adminGetKnockout(token, tournamentId),
       ])
+      setGroups(g)
       setSchedule(s)
       setStandings(st)
       setKnockout(k)
@@ -183,6 +185,47 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
             </div>
           </div>
         </Card>
+      )}
+
+      {activeTab === 'groups' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-white">Groups</h3>
+            <CreateGroupForm
+              token={token}
+              tournamentId={tournamentId}
+              onCreated={load}
+            />
+          </div>
+          {groups.length === 0 ? (
+            <Card><p className="text-sm text-gray-400">Belum ada group. Buat group untuk memulai.</p></Card>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2">
+              {groups.map((group: any) => (
+                <Card key={group.id}>
+                  <div className="mb-3 flex items-center justify-between">
+                    <h4 className="text-base font-semibold text-white">{group.name}</h4>
+                    <span className="text-xs text-gray-400">{group.members?.length || 0} tim</span>
+                  </div>
+                  <div className="space-y-2">
+                    {group.members?.length === 0 ? (
+                      <p className="text-xs text-gray-500">Belum ada tim.</p>
+                    ) : (
+                      group.members.map((m: any) => (
+                        <div key={m.id} className="flex items-center justify-between rounded-xl border border-white/5 bg-surface-900/40 px-3 py-2">
+                          <div>
+                            <div className="text-sm text-white">{m.team_name_snapshot || m.team_id}</div>
+                            <div className="text-xs text-gray-500">Seed: {m.seed || '-'}</div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
       )}
 
       {activeTab === 'schedule' && (
@@ -362,5 +405,47 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
         </div>
       )}
     </div>
+  )
+}
+
+function CreateGroupForm({ token, tournamentId, onCreated }: { token: string | null; tournamentId: string; onCreated: () => void }) {
+  const [name, setName] = useState<string>('')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!name.trim()) return
+    setSubmitting(true)
+    setError(null)
+    try {
+      await adminCreateGroup(token || '', tournamentId, { name: name.trim(), team_ids: [] })
+      setName('')
+      onCreated()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Gagal membuat group')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="flex gap-2">
+      <input
+        type="text"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="Nama group"
+        className="rounded-xl border border-white/10 bg-surface-900/60 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-brand-500 focus:outline-none"
+      />
+      <button
+        type="submit"
+        disabled={submitting || !name.trim()}
+        className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500 disabled:opacity-50"
+      >
+        {submitting ? 'Menyimpan...' : 'Buat Group'}
+      </button>
+      {error && <span className="text-xs text-red-400">{error}</span>}
+    </form>
   )
 }

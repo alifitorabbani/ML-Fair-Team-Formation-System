@@ -126,6 +126,34 @@ async def select_teams(tournament_id: str, data: TournamentTeamSelect, x_user_to
     )
 
 
+@router.get("/{tournament_id}/groups")
+async def list_groups(tournament_id: str, x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)):
+    _ = get_admin_user(x_user_token)
+    group_service = GroupService(db)
+    groups = await group_service.list_groups(tournament_id)
+    result = []
+    for group in groups:
+        members = await group_service.group_member_repo.get_by_group(group.id)
+        result.append({
+            "id": group.id,
+            "tournament_id": group.tournament_id,
+            "name": group.name,
+            "sort_order": group.sort_order,
+            "members": [
+                {
+                    "id": m.id,
+                    "group_id": m.group_id,
+                    "tournament_team_id": m.tournament_team_id,
+                    "seed": m.seed,
+                    "team_id": m.tournament_team.team_id if m.tournament_team else None,
+                    "team_name_snapshot": m.tournament_team.team_name_snapshot if m.tournament_team else None,
+                }
+                for m in members
+            ],
+        })
+    return result
+
+
 @router.post("/{tournament_id}/groups", response_model=GroupResponse)
 async def create_group(tournament_id: str, data: TournamentGroupCreate, x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)):
     _ = get_admin_user(x_user_token)

@@ -125,6 +125,17 @@ export async function adminUpdateGroup(token: string, tournamentId: string, grou
   return response.json()
 }
 
+export async function adminGetGroups(token: string, tournamentId: string): Promise<any[]> {
+  const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/groups`, {
+    headers: { 'X-User-Token': token },
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to fetch groups')
+  }
+  return response.json()
+}
+
 export async function adminGenerateSchedule(token: string, tournamentId: string): Promise<ScheduleGenerateResponse> {
   const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/schedule/generate`, {
     method: 'POST',
