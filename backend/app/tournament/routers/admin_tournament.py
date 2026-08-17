@@ -171,6 +171,103 @@ async def list_available_teams(tournament_id: str, x_user_token: Optional[str] =
     return available
 
 
+@router.post("/{tournament_id}/groups/auto-assign")
+async def auto_assign_groups(tournament_id: str, x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)):
+    _ = get_admin_user(x_user_token)
+    from app.tournament.services.group_service import GroupService
+    from app.repositories.team_repository import TeamRepository
+    from app.repositories.participant_repository import ParticipantRepository
+    from collections import defaultdict
+
+    group_service = GroupService(db)
+    team_repo = TeamRepository(db)
+    participant_repo = ParticipantRepository(db)
+
+    tournament = await group_service.tournament_repo.get_by_id(tournament_id)
+    if not tournament:
+        raise HTTPException(status_code=404, detail="Tournament not found")
+
+    tournament_teams = await group_service.team_repo.get_by_tournament(tournament_id)
+    if not tournament_teams:
+        raise HTTPException(status_code=400, detail="No teams in tournament")
+
+    groups = await group_service.group_repo.get_by_tournament(tournament_id)
+    if not groups:
+        raise HTTPException(status_code=400, detail="No groups created. Create groups first.")
+
+    team_skills = []
+    for tt in tournament_teams:
+        members = await team_repo.get_members_by_version(tt.team_version_id)
+        player_ids = [m.player_id for m in members if m.player_id]
+        participants = await participant_repo.get_by_ids(player_ids)
+        participants_map = {p.id: p for p in participants}
+        total_skill = 0.0
+        count = 0
+        for m in members:
+            p = participants_map.get(m.player_id)
+            if p and p.skill_score is not None:
+                total_skill += p.skill_score
+                count += 1
+        avg_skill = total_skill / count if count > 0 else 0.0
+        team_skills.append({
+            "team_id": tt.team_id,
+            "tournament_team_id": tt.id,
+            "skill_score": avg_skill,
+        })
+
+    team_skills.sort(key=lambda x: x["skill_score"], reverse=True)
+
+    group_count = len(groups)
+    teams_per_group = len(team_skills) // group_count
+    remainder = len(team_skills) % group_count
+
+    assignments: Dict[str, List[str]] = {g.id: [] for g in groups}
+    snake = False
+    group_idx = 0
+    direction = 1
+    for i, team in enumerate(team_skills):
+        if group_count == 1:
+            assignments[groups[0].id].append(team["tournament_team_id"])
+        else:
+            assignments[groups[group_idx].id].append(team["tournament_team_id"])
+        if not snake:
+            group_idx += direction
+            if group_idx == group_count - 1:
+                snake = True
+                direction = -1
+            elif group_idx == 0 and i > 0:
+                snake = True
+                direction = 1
+        else:
+            group_idx += direction
+            if group_idx == group_count - 1:
+                snake = False
+                direction = -1
+            elif group_idx == 0:
+                snake = False
+                direction = 1
+
+    result = []
+    for group in groups:
+        await group_service.group_member_repo.delete_by_group(group.id)
+        for seed_idx, tournament_team_id in enumerate(assignments[group.id], 1):
+            await group_service.group_member_repo.create(
+                {
+                    "group_id": group.id,
+                    "tournament_team_id": tournament_team_id,
+                    "seed": seed_idx,
+                }
+            )
+        members = await group_service.group_member_repo.get_by_group(group.id)
+        result.append({
+            "id": group.id,
+            "name": group.name,
+            "assigned_count": len(members),
+        })
+
+    return {"groups": result}
+
+
 @router.get("/{tournament_id}/groups")
 async def list_groups(tournament_id: str, x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)):
     _ = get_admin_user(x_user_token)

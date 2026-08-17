@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { adminGetTournament, adminUpdateTournament, adminGetTournamentTeams, adminGetAvailableTeams, adminCreateGroup, adminUpdateGroup, adminGetGroups, adminGenerateSchedule, adminGetSchedule, adminGetStandings, adminRecalculateStandings, adminOverrideStandings, adminCreateMatch, adminUpdateMatch, adminDeleteMatch, adminSubmitMatchResult, adminConfirmMatchResult, adminGenerateKnockout, adminGetKnockout, adminAdvanceKnockout, adminSetPlacement, adminFinalizeChampion } from '@/lib/tournamentApi'
+import { adminGetTournament, adminUpdateTournament, adminGetTournamentTeams, adminGetAvailableTeams, adminCreateGroup, adminUpdateGroup, adminGetGroups, adminAutoAssignGroups, adminGenerateSchedule, adminGetSchedule, adminGetStandings, adminRecalculateStandings, adminOverrideStandings, adminCreateMatch, adminUpdateMatch, adminDeleteMatch, adminSubmitMatchResult, adminConfirmMatchResult, adminGenerateKnockout, adminGetKnockout, adminAdvanceKnockout, adminSetPlacement, adminFinalizeChampion } from '@/lib/tournamentApi'
 import { useAuthToken } from '@/lib/hooks/useAuth'
 import { TournamentResponse } from '@/types'
 import LoadingSpinner from '@/components/shared/LoadingSpinner'
@@ -221,14 +221,32 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
         <div className="space-y-6">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-lg font-semibold text-white">Kelola Group</h3>
-            {!showCreateGroup && (
-              <button
-                onClick={() => setShowCreateGroup(true)}
-                className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500"
-              >
-                + Buat Group
-              </button>
-            )}
+            <div className="flex flex-wrap gap-2">
+              {!showCreateGroup && (
+                <button
+                  onClick={() => setShowCreateGroup(true)}
+                  className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500"
+                >
+                  + Buat Group
+                </button>
+              )}
+              {groups.length > 0 && (
+                <button
+                  onClick={async () => {
+                    if (!token) return
+                    try {
+                      await adminAutoAssignGroups(token, tournamentId)
+                      load()
+                    } catch (err) {
+                      alert(err instanceof Error ? err.message : 'Gagal mengisi group otomatis')
+                    }
+                  }}
+                  className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500"
+                >
+                  Auto-Isi Group
+                </button>
+              )}
+            </div>
           </div>
 
           {showCreateGroup && (

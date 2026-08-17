@@ -115,6 +115,18 @@ export async function adminGetAvailableTeams(token: string, tournamentId: string
   return response.json()
 }
 
+export async function adminAutoAssignGroups(token: string, tournamentId: string): Promise<any> {
+  const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/groups/auto-assign`, {
+    method: 'POST',
+    headers: { 'X-User-Token': token },
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to auto assign groups')
+  }
+  return response.json()
+}
+
 export async function adminCreateGroup(token: string, tournamentId: string, data: any): Promise<any> {
   const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/groups`, {
     method: 'POST',
