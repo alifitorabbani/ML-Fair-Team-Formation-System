@@ -7,7 +7,6 @@ import {
   BracketResponse,
   PlacementResponse,
   ScheduleGenerateResponse,
-  MatchResultOCRResponse,
 } from '@/types'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? ''
@@ -272,21 +271,6 @@ export async function adminConfirmMatchResult(token: string, tournamentId: strin
   if (!response.ok) {
     const error = await response.json()
     throw new Error(error.detail || 'Failed to confirm result')
-  }
-  return response.json()
-}
-
-export async function adminUploadResultOCR(token: string, tournamentId: string, matchId: string, file: File): Promise<MatchResultOCRResponse> {
-  const form = new FormData()
-  form.append('file', file)
-  const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/matches/${encodeURIComponent(matchId)}/result/ocr`, {
-    method: 'POST',
-    headers: { 'X-User-Token': token },
-    body: form,
-  })
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Failed to process OCR')
   }
   return response.json()
 }

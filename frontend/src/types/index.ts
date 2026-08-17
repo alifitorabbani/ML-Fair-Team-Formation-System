@@ -242,20 +242,3 @@ export interface ScheduleGenerateResponse {
   schedule: Record<string, any>[]
 }
 
-export interface MatchResultOCRResponse {
-  match_id: string
-  team_a_name?: string
-  team_b_name?: string
-  score_a?: number
-  score_b?: number
-  kills_a?: number
-  kills_b?: number
-  deaths_a?: number
-  deaths_b?: number
-  winner_team_id?: string
-  confidence: number
-  is_valid: boolean
-  validation_message?: string
-  raw_text?: string
-}
-

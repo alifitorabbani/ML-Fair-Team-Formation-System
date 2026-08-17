@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Header, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Dict, List, Optional
 import json
@@ -11,7 +11,6 @@ from app.tournament.services.group_service import GroupService
 from app.tournament.services.standings_service import StandingsService
 from app.tournament.services.bracket_service import BracketService
 from app.tournament.services.placement_service import PlacementService
-from app.tournament.services.ocr_service import OCRService
 from app.tournament.schemas.tournament_schemas import (
     TournamentCreate,
     TournamentUpdate,
@@ -23,7 +22,6 @@ from app.tournament.schemas.tournament_schemas import (
     MatchResultSubmit,
     StandingsOverride,
     PlacementSet,
-    MatchResultOCRResponse,
     TournamentResponse,
     TournamentDateResponse,
     TournamentTeamResponse,
@@ -619,34 +617,6 @@ async def confirm_result(tournament_id: str, match_id: str, x_user_token: Option
         result_confidence=match.result_confidence,
         created_at=match.created_at,
         updated_at=match.updated_at,
-    )
-
-
-@router.post("/{tournament_id}/matches/{match_id}/result/ocr", response_model=MatchResultOCRResponse)
-async def upload_result_ocr(tournament_id: str, match_id: str, file: UploadFile = File(...), x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)):
-    _ = get_admin_user(x_user_token)
-    match = await MatchService(db).match_repo.get_by_id(match_id)
-    if not match or match.tournament_id != tournament_id:
-        raise HTTPException(status_code=404, detail="Match not found")
-    contents = await file.read()
-    ocr_service = OCRService()
-    result = ocr_service.extract_result(contents, match.format, team_a_id=match.team_a_id, team_b_id=match.team_b_id)
-    validated = ocr_service.validate_against_match(result, match.team_a_id, match.team_b_id)
-    return MatchResultOCRResponse(
-        match_id=match_id,
-        team_a_name=validated.get("team_a_name"),
-        team_b_name=validated.get("team_b_name"),
-        score_a=validated.get("score_a"),
-        score_b=validated.get("score_b"),
-        kills_a=validated.get("kills_a"),
-        kills_b=validated.get("kills_b"),
-        deaths_a=validated.get("deaths_a"),
-        deaths_b=validated.get("deaths_b"),
-        winner_team_id=validated.get("winner_team_id"),
-        confidence=validated.get("confidence", 0.0),
-        is_valid=validated.get("is_valid", False),
-        validation_message=validated.get("validation_message"),
-        raw_text=validated.get("raw_text"),
     )
 
 

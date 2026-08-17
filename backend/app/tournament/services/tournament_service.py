@@ -371,6 +371,8 @@ class TournamentService:
             }
         )
         await self.db.flush()
+        if match.stage == MatchStage.GROUP_STAGE and match.group_id:
+            await self._recalculate_group_standings(tournament_id, match.group_id)
         return match
 
     async def confirm_match_result(self, tournament_id: str, match_id: str) -> Optional[Match]:

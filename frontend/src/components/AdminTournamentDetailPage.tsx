@@ -85,6 +85,8 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
     }
   }
 
+  const [matchError, setMatchError] = useState<string | null>(null)
+
   const handleRecalculateStandings = async () => {
     if (!token) return
     setSaving(true)
@@ -94,6 +96,39 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
       load()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Gagal menghitung ulang')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const [matchResults, setMatchResults] = useState<Record<string, { score_a: number; score_b: number; kills_a: number; kills_b: number; deaths_a: number; deaths_b: number }>>({})
+
+  const updateMatchResult = (matchId: string, field: string, value: number) => {
+    setMatchResults((prev) => ({
+      ...prev,
+      [matchId]: {
+        ...(prev[matchId] || { score_a: 0, score_b: 0, kills_a: 0, kills_b: 0, deaths_a: 0, deaths_b: 0 }),
+        [field]: value,
+      },
+    }))
+  }
+
+  const handleSubmitMatchResult = async (matchId: string) => {
+    if (!token) return
+    const data = matchResults[matchId]
+    if (!data) return
+    if (data.score_a === data.score_b) {
+      setMatchError('Score tidak boleh sama')
+      return
+    }
+    setSaving(true)
+    setMatchError(null)
+    try {
+      await adminSubmitMatchResult(token, tournamentId, matchId, data)
+      setMessage('Hasil pertandingan berhasil disimpan')
+      load()
+    } catch (err) {
+      setMatchError(err instanceof Error ? err.message : 'Gagal menyimpan hasil')
     } finally {
       setSaving(false)
     }
@@ -334,29 +369,108 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
               Generate Jadwal
             </button>
           </div>
+          {matchError && <p className="text-xs text-red-400">{matchError}</p>}
           {schedule.length === 0 ? (
             <Card><p className="text-sm text-gray-400">Belum ada jadwal.</p></Card>
           ) : (
             <div className="space-y-2">
-              {schedule.map((m) => (
-                <Card key={m.id}>
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <div className="text-sm font-medium text-white">{m.team_a_id} vs {m.team_b_id}</div>
-                      <div className="text-xs text-gray-400">{m.scheduled_date} • {m.start_time} - {m.end_time}</div>
+              {schedule.map((m) => {
+                const result = matchResults[m.id] || { score_a: 0, score_b: 0, kills_a: 0, kills_b: 0, deaths_a: 0, deaths_b: 0 }
+                const isCompleted = m.status === 'COMPLETED'
+                return (
+                  <Card key={m.id}>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <div className="text-sm font-medium text-white">{m.team_a_id} vs {m.team_b_id}</div>
+                        <div className="text-xs text-gray-400">{m.scheduled_date} • {m.start_time} - {m.end_time} • {m.format}</div>
+                      </div>
+                      <span className={`rounded-full px-2 py-1 text-xs font-medium ${isCompleted ? 'bg-green-500/10 text-green-300' : 'bg-gray-500/10 text-gray-300'}`}>
+                        {m.status}
+                      </span>
                     </div>
-                    <span className={`rounded-full px-2 py-1 text-xs font-medium ${m.status === 'COMPLETED' ? 'bg-green-500/10 text-green-300' : 'bg-gray-500/10 text-gray-300'}`}>
-                      {m.status}
-                    </span>
-                  </div>
-                  {m.status === 'COMPLETED' && (
-                    <div className="mt-2 text-sm font-semibold text-white">
-                      {m.score_a} - {m.score_b}
-                      {m.winner_team_id && <span className="ml-2 text-green-400">Win</span>}
-                    </div>
-                  )}
-                </Card>
-              ))}
+                    {isCompleted && (
+                      <div className="mt-2 text-sm font-semibold text-white">
+                        {m.score_a} - {m.score_b}
+                        {m.winner_team_id && <span className="ml-2 text-green-400">Win: {m.winner_team_id}</span>}
+                        <span className="ml-2 text-gray-400">K: {m.kills_a}-{m.kills_b} D: {m.deaths_a}-{m.deaths_b}</span>
+                      </div>
+                    )}
+                    {!isCompleted && (
+                      <div className="mt-3 space-y-2">
+                        <div className="grid gap-2 md:grid-cols-2">
+                          <div>
+                            <label className="mb-1 block text-xs text-gray-400">Score {m.team_a_id}</label>
+                            <input
+                              type="number"
+                              min={0}
+                              value={result.score_a}
+                              onChange={(e) => updateMatchResult(m.id, 'score_a', parseInt(e.target.value || '0', 10))}
+                              className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs text-gray-400">Score {m.team_b_id}</label>
+                            <input
+                              type="number"
+                              min={0}
+                              value={result.score_b}
+                              onChange={(e) => updateMatchResult(m.id, 'score_b', parseInt(e.target.value || '0', 10))}
+                              className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs text-gray-400">Kills {m.team_a_id}</label>
+                            <input
+                              type="number"
+                              min={0}
+                              value={result.kills_a}
+                              onChange={(e) => updateMatchResult(m.id, 'kills_a', parseInt(e.target.value || '0', 10))}
+                              className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs text-gray-400">Kills {m.team_b_id}</label>
+                            <input
+                              type="number"
+                              min={0}
+                              value={result.kills_b}
+                              onChange={(e) => updateMatchResult(m.id, 'kills_b', parseInt(e.target.value || '0', 10))}
+                              className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs text-gray-400">Deaths {m.team_a_id}</label>
+                            <input
+                              type="number"
+                              min={0}
+                              value={result.deaths_a}
+                              onChange={(e) => updateMatchResult(m.id, 'deaths_a', parseInt(e.target.value || '0', 10))}
+                              className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs text-gray-400">Deaths {m.team_b_id}</label>
+                            <input
+                              type="number"
+                              min={0}
+                              value={result.deaths_b}
+                              onChange={(e) => updateMatchResult(m.id, 'deaths_b', parseInt(e.target.value || '0', 10))}
+                              className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
+                            />
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleSubmitMatchResult(m.id)}
+                          disabled={saving}
+                          className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500 disabled:opacity-50"
+                        >
+                          {saving ? 'Menyimpan...' : 'Simpan Hasil'}
+                        </button>
+                      </div>
+                    )}
+                  </Card>
+                )
+              })}
             </div>
           )}
         </div>
