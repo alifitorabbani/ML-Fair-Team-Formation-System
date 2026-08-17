@@ -168,6 +168,25 @@ async def list_available_teams(tournament_id: str, x_user_token: Optional[str] =
         for t in all_teams
         if t.team_id not in assigned_team_ids
     ]
+    if not available:
+        tournament = await service.tournament_repo.get_by_id(tournament_id)
+        if tournament and tournament.selected_team_version_id:
+            from app.repositories.team_repository import TeamRepository
+            team_repo = TeamRepository(db)
+            version_members = await team_repo.get_members_by_version(tournament.selected_team_version_id)
+            seen = set()
+            for m in version_members:
+                if not m.team_id or m.team_id in seen:
+                    continue
+                seen.add(m.team_id)
+                available.append({
+                    "id": None,
+                    "tournament_id": tournament_id,
+                    "team_version_id": tournament.selected_team_version_id,
+                    "team_id": m.team_id,
+                    "team_name_snapshot": None,
+                    "seed": None,
+                })
     return available
 
 

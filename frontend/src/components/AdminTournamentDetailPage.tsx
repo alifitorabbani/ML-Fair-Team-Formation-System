@@ -584,18 +584,20 @@ function GroupCard({ token, tournamentId, group, onUpdated }: { token: string | 
           <h4 className="text-base font-semibold text-white">{group.name}</h4>
           <p className="text-xs text-gray-400">{assignedCount} tim</p>
         </div>
-        <button
-          onClick={() => setEditing(!editing)}
-          className="rounded-xl border border-white/10 px-3 py-1.5 text-xs font-medium text-gray-300 hover:text-white"
-        >
-          {editing ? 'Batal' : 'Edit'}
-        </button>
+        {assignedCount > 0 && (
+          <button
+            onClick={() => setEditing(!editing)}
+            className="rounded-xl border border-white/10 px-3 py-1.5 text-xs font-medium text-gray-300 hover:text-white"
+          >
+            {editing ? 'Batal' : 'Edit'}
+          </button>
+        )}
       </div>
 
       {!editing ? (
         <div className="space-y-2">
-          {group.members?.length === 0 ? (
-            <p className="text-xs text-gray-500">Belum ada tim.</p>
+          {assignedCount === 0 ? (
+            <p className="text-xs text-gray-500">Belum ada tim. Gunakan tombol Auto-Isi Group untuk mengisi group ini.</p>
           ) : (
             group.members.map((m: any) => (
               <div key={m.id} className="flex items-center justify-between rounded-xl border border-white/5 bg-surface-900/40 px-3 py-2">
@@ -622,7 +624,7 @@ function GroupCard({ token, tournamentId, group, onUpdated }: { token: string | 
                       checked={selectedTeamIds.includes(t.team_id)}
                       onChange={(e) => {
                         setSelectedTeamIds((prev) =>
-                          e.target.checked ? [...prev, t.team_id] : prev.filter((id) => id !== t.team_id)
+                          e.target.checked ? [...prev, t.team_id] : prev.filter((id: string) => id !== t.team_id)
                         )
                       }}
                       className="h-4 w-4 rounded border-white/20 bg-surface-900/60 text-brand-500 focus:ring-brand-500"
