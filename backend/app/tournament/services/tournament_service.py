@@ -267,6 +267,18 @@ class TournamentService:
         await self.db.refresh(group)
         return group
 
+    async def clear_groups(self, tournament_id: str) -> None:
+        tournament = await self.tournament_repo.get_by_id(tournament_id)
+        if not tournament:
+            raise ValueError("Tournament not found")
+        await self.group_member_repo.delete_by_tournament(tournament_id)
+        await self.group_repo.delete_by_tournament(tournament_id)
+        if tournament.status == TournamentStatus.GROUPS_CONFIGURED:
+            tournament.status = TournamentStatus.TEAMS_LOCKED
+            tournament.updated_at = datetime.utcnow()
+            await self.db.flush()
+            await self.db.refresh(tournament)
+
     async def create_match(self, tournament_id: str, data: MatchCreate) -> Match:
         tournament = await self.tournament_repo.get_by_id(tournament_id)
         if not tournament:

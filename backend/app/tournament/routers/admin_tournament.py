@@ -328,6 +328,17 @@ async def create_group(tournament_id: str, data: TournamentGroupCreate, x_user_t
     return GroupResponse(id=group.id, tournament_id=group.tournament_id, name=group.name, sort_order=group.sort_order)
 
 
+@router.post("/{tournament_id}/groups/clear")
+async def clear_groups(tournament_id: str, x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)):
+    _ = get_admin_user(x_user_token)
+    service = TournamentService(db)
+    try:
+        await service.clear_groups(tournament_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"message": "All groups cleared"}
+
+
 @router.patch("/{tournament_id}/groups/{group_id}", response_model=GroupResponse)
 async def update_group(tournament_id: str, group_id: str, data: TournamentGroupUpdate, x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)):
     _ = get_admin_user(x_user_token)

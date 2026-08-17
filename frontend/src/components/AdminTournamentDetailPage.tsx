@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { adminGetTournament, adminUpdateTournament, adminGetTournamentTeams, adminGetAvailableTeams, adminCreateGroup, adminUpdateGroup, adminGetGroups, adminAutoAssignGroups, adminGenerateSchedule, adminGetSchedule, adminGetStandings, adminRecalculateStandings, adminOverrideStandings, adminCreateMatch, adminUpdateMatch, adminDeleteMatch, adminSubmitMatchResult, adminConfirmMatchResult, adminGenerateKnockout, adminGetKnockout, adminAdvanceKnockout, adminSetPlacement, adminFinalizeChampion } from '@/lib/tournamentApi'
+import { adminGetTournament, adminUpdateTournament, adminGetTournamentTeams, adminGetAvailableTeams, adminCreateGroup, adminUpdateGroup, adminGetGroups, adminClearGroups, adminAutoAssignGroups, adminGenerateSchedule, adminGetSchedule, adminGetStandings, adminRecalculateStandings, adminOverrideStandings, adminCreateMatch, adminUpdateMatch, adminDeleteMatch, adminSubmitMatchResult, adminConfirmMatchResult, adminGenerateKnockout, adminGetKnockout, adminAdvanceKnockout, adminSetPlacement, adminFinalizeChampion } from '@/lib/tournamentApi'
 import { useAuthToken } from '@/lib/hooks/useAuth'
 import { TournamentResponse } from '@/types'
 import LoadingSpinner from '@/components/shared/LoadingSpinner'
@@ -228,6 +228,23 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
                   className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500"
                 >
                   + Buat Group
+                </button>
+              )}
+              {groups.length > 0 && (
+                <button
+                  onClick={async () => {
+                    if (!token) return
+                    if (!confirm('Hapus semua group dan isinya?')) return
+                    try {
+                      await adminClearGroups(token, tournamentId)
+                      load()
+                    } catch (err) {
+                      alert(err instanceof Error ? err.message : 'Gagal mengosongkan group')
+                    }
+                  }}
+                  className="rounded-xl border border-white/10 px-4 py-2 text-sm font-medium text-gray-300 hover:text-white"
+                >
+                  Kosongkan Semua Group
                 </button>
               )}
               {groups.length > 0 && (

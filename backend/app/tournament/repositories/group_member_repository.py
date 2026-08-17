@@ -31,3 +31,12 @@ class TournamentGroupMemberRepository:
 
     async def delete_by_group(self, group_id: str):
         await self.db.execute(delete(TournamentGroupMember).where(TournamentGroupMember.group_id == group_id))
+
+    async def delete_by_tournament(self, tournament_id: str):
+        await self.db.execute(
+            delete(TournamentGroupMember).where(
+                TournamentGroupMember.group_id.in_(
+                    select(TournamentGroup.id).where(TournamentGroup.tournament_id == tournament_id)
+                )
+            )
+        )
