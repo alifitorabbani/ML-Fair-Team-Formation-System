@@ -1,0 +1,425 @@
+import {
+  TournamentResponse,
+  TournamentDateResponse,
+  TournamentTeamResponse,
+  MatchResponse,
+  StandingResponse,
+  BracketResponse,
+  PlacementResponse,
+  ScheduleGenerateResponse,
+  MatchResultOCRResponse,
+} from '@/types'
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? ''
+
+export async function adminCreateTournament(token: string, data: any): Promise<TournamentResponse> {
+  const response = await fetch(`${API_BASE}/api/admin/tournaments`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-User-Token': token,
+    },
+    body: JSON.stringify(data),
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to create tournament')
+  }
+  return response.json()
+}
+
+export async function adminListTournaments(token: string): Promise<TournamentResponse[]> {
+  const response = await fetch(`${API_BASE}/api/admin/tournaments`, {
+    headers: { 'X-User-Token': token },
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to fetch tournaments')
+  }
+  return response.json()
+}
+
+export async function adminGetTournament(token: string, tournamentId: string): Promise<TournamentResponse> {
+  const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}`, {
+    headers: { 'X-User-Token': token },
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to fetch tournament')
+  }
+  return response.json()
+}
+
+export async function adminUpdateTournament(token: string, tournamentId: string, data: any): Promise<TournamentResponse> {
+  const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-User-Token': token,
+    },
+    body: JSON.stringify(data),
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to update tournament')
+  }
+  return response.json()
+}
+
+export async function adminDeleteTournament(token: string, tournamentId: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}`, {
+    method: 'DELETE',
+    headers: { 'X-User-Token': token },
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to delete tournament')
+  }
+}
+
+export async function adminSelectTeams(token: string, tournamentId: string, teamVersionId: string, teamIds: string[]): Promise<any> {
+  const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/teams`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-User-Token': token,
+    },
+    body: JSON.stringify({ team_version_id: teamVersionId, team_ids: teamIds }),
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to select teams')
+  }
+  return response.json()
+}
+
+export async function adminCreateGroup(token: string, tournamentId: string, data: any): Promise<any> {
+  const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/groups`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-User-Token': token,
+    },
+    body: JSON.stringify(data),
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to create group')
+  }
+  return response.json()
+}
+
+export async function adminUpdateGroup(token: string, tournamentId: string, groupId: string, data: any): Promise<any> {
+  const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/groups/${encodeURIComponent(groupId)}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-User-Token': token,
+    },
+    body: JSON.stringify(data),
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to update group')
+  }
+  return response.json()
+}
+
+export async function adminGenerateSchedule(token: string, tournamentId: string): Promise<ScheduleGenerateResponse> {
+  const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/schedule/generate`, {
+    method: 'POST',
+    headers: { 'X-User-Token': token },
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to generate schedule')
+  }
+  return response.json()
+}
+
+export async function adminGetSchedule(token: string, tournamentId: string): Promise<MatchResponse[]> {
+  const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/schedule`, {
+    headers: { 'X-User-Token': token },
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to fetch schedule')
+  }
+  return response.json()
+}
+
+export async function adminCreateMatch(token: string, tournamentId: string, data: any): Promise<MatchResponse> {
+  const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/matches`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-User-Token': token,
+    },
+    body: JSON.stringify(data),
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to create match')
+  }
+  return response.json()
+}
+
+export async function adminUpdateMatch(token: string, tournamentId: string, matchId: string, data: any): Promise<MatchResponse> {
+  const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/matches/${encodeURIComponent(matchId)}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-User-Token': token,
+    },
+    body: JSON.stringify(data),
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to update match')
+  }
+  return response.json()
+}
+
+export async function adminDeleteMatch(token: string, tournamentId: string, matchId: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/matches/${encodeURIComponent(matchId)}`, {
+    method: 'DELETE',
+    headers: { 'X-User-Token': token },
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to delete match')
+  }
+}
+
+export async function adminSubmitMatchResult(token: string, tournamentId: string, matchId: string, data: { score_a: number; score_b: number; kills_a?: number; kills_b?: number; deaths_a?: number; deaths_b?: number; change_reason?: string }): Promise<MatchResponse> {
+  const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/matches/${encodeURIComponent(matchId)}/result`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-User-Token': token,
+    },
+    body: JSON.stringify(data),
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to submit result')
+  }
+  return response.json()
+}
+
+export async function adminConfirmMatchResult(token: string, tournamentId: string, matchId: string): Promise<MatchResponse> {
+  const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/matches/${encodeURIComponent(matchId)}/result/confirm`, {
+    method: 'POST',
+    headers: { 'X-User-Token': token },
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to confirm result')
+  }
+  return response.json()
+}
+
+export async function adminUploadResultOCR(token: string, tournamentId: string, matchId: string, file: File): Promise<MatchResultOCRResponse> {
+  const form = new FormData()
+  form.append('file', file)
+  const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/matches/${encodeURIComponent(matchId)}/result/ocr`, {
+    method: 'POST',
+    headers: { 'X-User-Token': token },
+    body: form,
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to process OCR')
+  }
+  return response.json()
+}
+
+export async function adminGetStandings(token: string, tournamentId: string): Promise<any[]> {
+  const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/standings`, {
+    headers: { 'X-User-Token': token },
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to fetch standings')
+  }
+  return response.json()
+}
+
+export async function adminOverrideStandings(token: string, tournamentId: string, data: any[]): Promise<any[]> {
+  const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/standings/override`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-User-Token': token,
+    },
+    body: JSON.stringify(data),
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to override standings')
+  }
+  return response.json()
+}
+
+export async function adminRecalculateStandings(token: string, tournamentId: string): Promise<any[]> {
+  const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/standings/recalculate`, {
+    method: 'POST',
+    headers: { 'X-User-Token': token },
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to recalculate standings')
+  }
+  return response.json()
+}
+
+export async function adminGenerateKnockout(token: string, tournamentId: string, bracketType: string, qualifiedTeamIds: string[]): Promise<any> {
+  const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/knockout/generate?bracket_type=${encodeURIComponent(bracketType)}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-User-Token': token,
+    },
+    body: JSON.stringify(qualifiedTeamIds),
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to generate knockout')
+  }
+  return response.json()
+}
+
+export async function adminGetKnockout(token: string, tournamentId: string): Promise<any[]> {
+  const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/knockout`, {
+    headers: { 'X-User-Token': token },
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to fetch knockout')
+  }
+  return response.json()
+}
+
+export async function adminAdvanceKnockout(token: string, tournamentId: string, matchId: string): Promise<any> {
+  const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/knockout/${encodeURIComponent(matchId)}/advance`, {
+    method: 'POST',
+    headers: { 'X-User-Token': token },
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to advance knockout')
+  }
+  return response.json()
+}
+
+export async function adminSetPlacement(token: string, tournamentId: string, teamId: string, placement: number, source?: string): Promise<PlacementResponse> {
+  const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/placements/${encodeURIComponent(teamId)}?placement=${placement}${source ? `&source=${encodeURIComponent(source)}` : ''}`, {
+    method: 'POST',
+    headers: { 'X-User-Token': token },
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to set placement')
+  }
+  return response.json()
+}
+
+export async function adminFinalizeChampion(token: string, tournamentId: string): Promise<TournamentResponse> {
+  const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/champion/finalize`, {
+    method: 'POST',
+    headers: { 'X-User-Token': token },
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to finalize champion')
+  }
+  return response.json()
+}
+
+export async function userListTournaments(token: string): Promise<TournamentResponse[]> {
+  const response = await fetch(`${API_BASE}/api/tournaments`, {
+    headers: { 'X-User-Token': token },
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to fetch tournaments')
+  }
+  return response.json()
+}
+
+export async function userGetTournament(token: string, tournamentId: string): Promise<any> {
+  const response = await fetch(`${API_BASE}/api/tournaments/${encodeURIComponent(tournamentId)}`, {
+    headers: { 'X-User-Token': token },
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to fetch tournament')
+  }
+  return response.json()
+}
+
+export async function userGetSchedule(token: string, tournamentId: string): Promise<MatchResponse[]> {
+  const response = await fetch(`${API_BASE}/api/tournaments/${encodeURIComponent(tournamentId)}/schedule`, {
+    headers: { 'X-User-Token': token },
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to fetch schedule')
+  }
+  return response.json()
+}
+
+export async function userGetMatches(token: string, tournamentId: string): Promise<MatchResponse[]> {
+  const response = await fetch(`${API_BASE}/api/tournaments/${encodeURIComponent(tournamentId)}/matches`, {
+    headers: { 'X-User-Token': token },
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to fetch matches')
+  }
+  return response.json()
+}
+
+export async function userGetStandings(token: string, tournamentId: string): Promise<any[]> {
+  const response = await fetch(`${API_BASE}/api/tournaments/${encodeURIComponent(tournamentId)}/standings`, {
+    headers: { 'X-User-Token': token },
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to fetch standings')
+  }
+  return response.json()
+}
+
+export async function userGetKnockout(token: string, tournamentId: string): Promise<any[]> {
+  const response = await fetch(`${API_BASE}/api/tournaments/${encodeURIComponent(tournamentId)}/knockout`, {
+    headers: { 'X-User-Token': token },
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to fetch knockout')
+  }
+  return response.json()
+}
+
+export async function userGetResults(token: string, tournamentId: string): Promise<MatchResponse[]> {
+  const response = await fetch(`${API_BASE}/api/tournaments/${encodeURIComponent(tournamentId)}/results`, {
+    headers: { 'X-User-Token': token },
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to fetch results')
+  }
+  return response.json()
+}
+
+export async function userGetPlacements(token: string, tournamentId: string): Promise<PlacementResponse[]> {
+  const response = await fetch(`${API_BASE}/api/tournaments/${encodeURIComponent(tournamentId)}/placements`, {
+    headers: { 'X-User-Token': token },
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to fetch placements')
+  }
+  return response.json()
+}

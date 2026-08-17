@@ -139,6 +139,8 @@ from app.repositories.payment_repository import PaymentRepository
 from app.repositories.system_state_repository import SystemStateRepository
 from app.repositories.audit_repository import AuditRepository
 from app.database import get_db, init_db, Base, engine
+from app.tournament.routers.admin_tournament import router as admin_tournament_router
+from app.tournament.routers.user_tournament import router as user_tournament_router
 service = TeamFormationService()
 
 
@@ -249,6 +251,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(admin_tournament_router)
+app.include_router(user_tournament_router)
 
 
 @app.exception_handler(HTTPException)

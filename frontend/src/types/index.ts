@@ -115,3 +115,147 @@ export interface AuditLogResponse {
   timestamp: string
   metadata?: Record<string, any>
 }
+
+export interface TournamentResponse {
+  id: string
+  name: string
+  description?: string
+  timezone: string
+  status: string
+  third_place_mode: string
+  selected_team_version_id?: string
+  champion_team_id?: string
+  runner_up_team_id?: string
+  third_place_team_id?: string
+  created_by?: string
+  created_at: string
+  updated_at: string
+  finalized_at?: string
+}
+
+export interface TournamentDateResponse {
+  id: string
+  tournament_id: string
+  date: string
+  start_time: string
+  end_time: string
+  match_duration_minutes: number
+  buffer_minutes: number
+  min_rest_minutes: number
+}
+
+export interface TournamentTeamResponse {
+  id: string
+  tournament_id: string
+  team_version_id: string
+  team_id: string
+  team_name_snapshot?: string
+  seed?: number
+}
+
+export interface MatchResponse {
+  id: string
+  tournament_id: string
+  stage: string
+  group_id?: string
+  bracket_id?: string
+  round?: number
+  match_number?: number
+  scheduled_date: string
+  start_time: string
+  end_time: string
+  team_a_id?: string
+  team_b_id?: string
+  format: string
+  status: string
+  score_a?: number
+  score_b?: number
+  kills_a?: number
+  kills_b?: number
+  deaths_a?: number
+  deaths_b?: number
+  winner_team_id?: string
+  result_confidence?: number
+  created_at: string
+  updated_at: string
+}
+
+export interface StandingResponse {
+  id: string
+  group_id: string
+  team_id: string
+  rank?: number
+  played: number
+  win: number
+  loss: number
+  kill: number
+  death: number
+  kill_difference: number
+  points: number
+  computed_at: string
+  is_manual_override: boolean
+}
+
+export interface BracketResponse {
+  id: string
+  tournament_id: string
+  name: string
+  bracket_type: string
+  sort_order?: number
+  rounds?: BracketRoundResponse[]
+}
+
+export interface BracketRoundResponse {
+  id: string
+  round_number: number
+  round_name?: string
+  slots: BracketSlotResponse[]
+}
+
+export interface BracketSlotResponse {
+  id: string
+  slot_number: number
+  team_id?: string
+  next_match_id?: string
+  next_slot_number?: number
+  status: string
+}
+
+export interface PlacementResponse {
+  id: string
+  tournament_id: string
+  team_id: string
+  placement: number
+  source?: string
+}
+
+export interface ScheduleGenerateResponse {
+  total_matches: number
+  total_days: number
+  min_rest_gap?: number
+  avg_rest_gap?: number
+  max_rest_gap?: number
+  conflict_count: number
+  constraint_violations: string[]
+  fairness_score?: number
+  warnings: string[]
+  schedule: Record<string, any>[]
+}
+
+export interface MatchResultOCRResponse {
+  match_id: string
+  team_a_name?: string
+  team_b_name?: string
+  score_a?: number
+  score_b?: number
+  kills_a?: number
+  kills_b?: number
+  deaths_a?: number
+  deaths_b?: number
+  winner_team_id?: string
+  confidence: number
+  is_valid: boolean
+  validation_message?: string
+  raw_text?: string
+}
+

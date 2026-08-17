@@ -8,10 +8,14 @@ import ProfilePage from '@/components/ProfilePage'
 import { adminProcessParticipants, getSystemState } from '@/lib/api'
 import AdminDashboard from '@/components/AdminDashboard'
 import PaymentPage from '@/components/PaymentPage'
+import TournamentsListPage from '@/components/TournamentsListPage'
+import TournamentDetailPage from '@/components/TournamentDetailPage'
+import AdminTournamentsPage from '@/components/AdminTournamentsPage'
+import AdminTournamentDetailPage from '@/components/AdminTournamentDetailPage'
 import ErrorMessage from '@/components/shared/ErrorMessage'
 import { SystemStateBadge } from '@/components/shared/StatusBadge'
 
-type Page = 'rankings' | 'teams' | 'profile' | 'admin' | 'payment'
+type Page = 'rankings' | 'teams' | 'profile' | 'admin' | 'payment' | 'tournaments' | 'tournament-detail' | 'admin-tournaments' | 'admin-tournament-detail'
 
 interface UserSession {
   token: string
@@ -33,6 +37,8 @@ export default function Home() {
   const [rankingAvailable, setRankingAvailable] = useState(false)
   const [teamAvailable, setTeamAvailable] = useState(false)
   const [initializing, setInitializing] = useState(true)
+  const [selectedTournamentId, setSelectedTournamentId] = useState<string | null>(null)
+  const [selectedAdminTournamentId, setSelectedAdminTournamentId] = useState<string | null>(null)
 
   useEffect(() => {
     const init = async () => {
@@ -198,6 +204,9 @@ export default function Home() {
               <NavButton active={currentPage === 'admin'} onClick={() => setCurrentPage('admin')}>
                 Dashboard Admin
               </NavButton>
+              <NavButton active={currentPage === 'admin-tournaments'} onClick={() => { setSelectedAdminTournamentId(null); setCurrentPage('admin-tournaments'); }}>
+                Turnamen
+              </NavButton>
             )}
             {!isAdmin && rankingAvailable && (
               <NavButton active={currentPage === 'payment'} onClick={() => setCurrentPage('payment')}>
@@ -210,6 +219,12 @@ export default function Home() {
               disabled={!isAdmin && !teamAvailable}
             >
               {isAdmin ? 'Tim' : '3. Tim'}
+            </NavButton>
+            <NavButton
+              active={currentPage === 'tournaments'}
+              onClick={() => setCurrentPage('tournaments')}
+            >
+              Turnamen
             </NavButton>
           </div>
         </nav>
@@ -225,12 +240,22 @@ export default function Home() {
               processSuccess={processSuccess}
             />
           )}
+          {isAdmin && currentPage === 'admin-tournaments' && (
+            <AdminTournamentsPage onNavigateToDetail={(id) => { setSelectedAdminTournamentId(id); setCurrentPage('admin-tournament-detail'); }} />
+          )}
+          {isAdmin && currentPage === 'admin-tournament-detail' && selectedAdminTournamentId && (
+            <AdminTournamentDetailPage tournamentId={selectedAdminTournamentId} onBack={() => setCurrentPage('admin-tournaments')} />
+          )}
           {currentPage === 'rankings' && <RankingsPage />}
           {currentPage === 'teams' && (
             <ResultsPage onBack={() => setCurrentPage('rankings')} isAdmin={isAdmin} />
           )}
           {currentPage === 'profile' && user && <ProfilePage token={user.token} />}
           {currentPage === 'payment' && user && <PaymentPage token={user.token} />}
+          {currentPage === 'tournaments' && <TournamentsListPage onNavigateToDetail={(id) => { setSelectedTournamentId(id); setCurrentPage('tournament-detail'); }} />}
+          {currentPage === 'tournament-detail' && selectedTournamentId && (
+            <TournamentDetailPage tournamentId={selectedTournamentId} onBack={() => setCurrentPage('tournaments')} />
+          )}
         </div>
       </div>
     </main>

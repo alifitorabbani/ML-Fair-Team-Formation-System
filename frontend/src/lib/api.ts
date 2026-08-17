@@ -224,7 +224,7 @@ export async function adminSeedPayments(token: string): Promise<{ inserted_count
   return response.json()
 }
 
-export async function adminSyncParticipants(token: string): Promise<{ deleted_count: number; inserted_count: number; updated_count: number; total_participants: number }> {
+export async function adminSyncParticipants(token: string): Promise<{ message: string; count: number }> {
   const response = await fetch(`${API_BASE}/api/admin/sync-participants`, {
     method: 'POST',
     headers: {
@@ -319,9 +319,7 @@ export async function adminGetRankingVersions(token: string): Promise<{ versions
   return response.json()
 }
 
-export async function adminGetTeamVersions(token: string): Promise<{
-  versions: TeamVersionResponse[]
-}> {
+export async function adminGetTeamVersions(token: string): Promise<{ versions: TeamVersionResponse[] }> {
   const response = await fetch(`${API_BASE}/api/admin/team-versions`, {
     headers: {
       'X-User-Token': token,
