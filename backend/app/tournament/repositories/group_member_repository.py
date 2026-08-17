@@ -2,7 +2,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from typing import Optional, List
 
-from app.tournament.models.tournament_models import TournamentGroupMember
+from app.tournament.models.tournament_models import TournamentGroup, TournamentGroupMember
 
 class TournamentGroupMemberRepository:
     def __init__(self, db: AsyncSession):
@@ -33,10 +33,10 @@ class TournamentGroupMemberRepository:
         await self.db.execute(delete(TournamentGroupMember).where(TournamentGroupMember.group_id == group_id))
 
     async def delete_by_tournament(self, tournament_id: str):
-        await self.db.execute(
-            delete(TournamentGroupMember).where(
-                TournamentGroupMember.group_id.in_(
-                    select(TournamentGroup.id).where(TournamentGroup.tournament_id == tournament_id)
-                )
+        group_ids = [g.id for g in (await self.db.execute(
+            select(TournamentGroup.id).where(TournamentGroup.tournament_id == tournament_id)
+        )).scalars().all()]
+        if group_ids:
+            await self.db.execute(
+                delete(TournamentGroupMember).where(TournamentGroupMember.group_id.in_(group_ids))
             )
-        )
