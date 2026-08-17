@@ -160,6 +160,8 @@ class MatchResultSubmit(BaseModel):
     kills_b: Optional[int] = None
     deaths_a: Optional[int] = None
     deaths_b: Optional[int] = None
+    winner_team_id: Optional[str] = None
+    loser_team_id: Optional[str] = None
     change_reason: Optional[str] = None
     map_results: Optional[List[BracketMatchMapSubmit]] = None
 

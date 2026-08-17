@@ -121,9 +121,9 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
     }
   }
 
-  const [matchResults, setMatchResults] = useState<Record<string, { score_a: number; score_b: number; kills_a: number; kills_b: number; deaths_a: number; deaths_b: number }>>({})
+  const [matchResults, setMatchResults] = useState<Record<string, { score_a: number; score_b: number; kills_a: number; kills_b: number; deaths_a: number; deaths_b: number; winner_team_id?: string; loser_team_id?: string }>>({})
 
-  const updateMatchResult = (matchId: string, field: string, value: number) => {
+  const updateMatchResult = (matchId: string, field: string, value: number | string) => {
     setMatchResults((prev) => ({
       ...prev,
       [matchId]: {
@@ -139,6 +139,14 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
     if (!data) return
     if (data.score_a === data.score_b) {
       setMatchError('Score tidak boleh sama')
+      return
+    }
+    if (!data.winner_team_id || !data.loser_team_id) {
+      setMatchError('Winner dan Loser harus dipilih')
+      return
+    }
+    if (data.winner_team_id === data.loser_team_id) {
+      setMatchError('Winner dan Loser tidak boleh sama')
       return
     }
     setSaving(true)
@@ -542,27 +550,53 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
                               onChange={(e) => updateMatchResult(m.id, 'deaths_a', parseInt(e.target.value || '0', 10))}
                               className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
                             />
-                          </div>
-                          <div>
-                            <label className="mb-1 block text-xs text-gray-400">Deaths {m.team_b_id}</label>
-                            <input
-                              type="number"
-                              min={0}
-                              value={result.deaths_b}
-                              onChange={(e) => updateMatchResult(m.id, 'deaths_b', parseInt(e.target.value || '0', 10))}
-                              className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
-                            />
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => handleSubmitMatchResult(m.id)}
-                          disabled={saving}
-                          className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500 disabled:opacity-50"
-                        >
-                          {saving ? 'Menyimpan...' : 'Simpan Hasil'}
-                        </button>
-                      </div>
-                    )}
+                           </div>
+                           <div>
+                             <label className="mb-1 block text-xs text-gray-400">Deaths {m.team_b_id}</label>
+                             <input
+                               type="number"
+                               min={0}
+                               value={result.deaths_b}
+                               onChange={(e) => updateMatchResult(m.id, 'deaths_b', parseInt(e.target.value || '0', 10))}
+                               className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
+                             />
+                           </div>
+                         </div>
+                         <div className="grid gap-2 md:grid-cols-2">
+                           <div>
+                             <label className="mb-1 block text-xs text-gray-400">Winner</label>
+                             <select
+                               value={result.winner_team_id || ''}
+                               onChange={(e) => updateMatchResult(m.id, 'winner_team_id', e.target.value)}
+                               className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
+                             >
+                               <option value="">- Pilih Winner -</option>
+                               <option value={m.team_a_id}>{m.team_a_id}</option>
+                               <option value={m.team_b_id}>{m.team_b_id}</option>
+                             </select>
+                           </div>
+                           <div>
+                             <label className="mb-1 block text-xs text-gray-400">Loser</label>
+                             <select
+                               value={result.loser_team_id || ''}
+                               onChange={(e) => updateMatchResult(m.id, 'loser_team_id', e.target.value)}
+                               className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
+                             >
+                               <option value="">- Pilih Loser -</option>
+                               <option value={m.team_a_id}>{m.team_a_id}</option>
+                               <option value={m.team_b_id}>{m.team_b_id}</option>
+                             </select>
+                           </div>
+                         </div>
+                         <button
+                           onClick={() => handleSubmitMatchResult(m.id)}
+                           disabled={saving}
+                           className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500 disabled:opacity-50"
+                         >
+                           {saving ? 'Menyimpan...' : 'Simpan Hasil'}
+                         </button>
+                       </div>
+                     )}
                   </Card>
                 )
               })}

@@ -28,7 +28,7 @@ class MatchService:
             return False
         return True
 
-    async def submit_result(self, match_id: str, score_a: int, score_b: int, kills_a: Optional[int] = None, kills_b: Optional[int] = None, deaths_a: Optional[int] = None, deaths_b: Optional[int] = None, change_reason: Optional[str] = None, map_results: Optional[List[Dict[str, Any]]] = None) -> Match:
+    async def submit_result(self, match_id: str, score_a: int, score_b: int, kills_a: Optional[int] = None, kills_b: Optional[int] = None, deaths_a: Optional[int] = None, deaths_b: Optional[int] = None, winner_team_id: Optional[str] = None, loser_team_id: Optional[str] = None, change_reason: Optional[str] = None, map_results: Optional[List[Dict[str, Any]]] = None) -> Match:
         match = await self.match_repo.get_by_id(match_id)
         if not match:
             raise ValueError("Match not found")
@@ -46,17 +46,26 @@ class MatchService:
                     "kills_b": kills_b,
                     "deaths_a": deaths_a,
                     "deaths_b": deaths_b,
-                    "winner_team_id": match.team_a_id if score_a > score_b else match.team_b_id,
+                    "winner_team_id": winner_team_id or (match.team_a_id if score_a > score_b else match.team_b_id),
                     "change_reason": change_reason,
                 }
             )
+        # Admin-assigned winner/loser take precedence; fallback to score only if not provided
+        final_winner = winner_team_id or (match.team_a_id if score_a > score_b else match.team_b_id)
+        final_loser = loser_team_id or (match.team_b_id if score_a > score_b else match.team_a_id)
+        if final_winner not in (match.team_a_id, match.team_b_id):
+            raise ValueError("Winner must be one of the match participants")
+        if final_loser not in (match.team_a_id, match.team_b_id):
+            raise ValueError("Loser must be one of the match participants")
+        if final_winner == final_loser:
+            raise ValueError("Winner and loser must be different")
         match.score_a = score_a
         match.score_b = score_b
         match.kills_a = kills_a
         match.kills_b = kills_b
         match.deaths_a = deaths_a
         match.deaths_b = deaths_b
-        match.winner_team_id = match.team_a_id if score_a > score_b else match.team_b_id
+        match.winner_team_id = final_winner
         match.status = MatchStatus.COMPLETED
         match.updated_at = datetime.utcnow()
         await self.db.flush()

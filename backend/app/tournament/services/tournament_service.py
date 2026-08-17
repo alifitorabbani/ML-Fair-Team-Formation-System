@@ -344,6 +344,20 @@ class TournamentService:
             raise ValueError(f"Invalid score for {match.format}: winner must have exactly {required_wins} wins")
         if data.score_a == data.score_b:
             raise ValueError("Score cannot be tied")
+        if data.winner_team_id not in (match.team_a_id, match.team_b_id):
+            raise ValueError("Winner must be one of the match participants")
+        if data.loser_team_id not in (match.team_a_id, match.team_b_id):
+            raise ValueError("Loser must be one of the match participants")
+        if data.winner_team_id == data.loser_team_id:
+            raise ValueError("Winner and loser must be different")
+        # Validate breakdown consistency for BO3/BO5/BO7
+        if data.map_results and match.format in (BOFormat.BO3, BOFormat.BO5, BOFormat.BO7):
+            team_a_wins = sum(1 for m in data.map_results if m.winner_team_id == match.team_a_id)
+            team_b_wins = sum(1 for m in data.map_results if m.winner_team_id == match.team_b_id)
+            if data.winner_team_id == match.team_a_id and team_a_wins != required_wins:
+                raise ValueError(f"Breakdown shows {team_a_wins} wins for Team A but series winner is Team A and requires {required_wins} wins")
+            if data.winner_team_id == match.team_b_id and team_b_wins != required_wins:
+                raise ValueError(f"Breakdown shows {team_b_wins} wins for Team B but series winner is Team B and requires {required_wins} wins")
         map_results = None
         if hasattr(data, 'map_results') and data.map_results:
             map_results = [m.model_dump() for m in data.map_results]
@@ -355,11 +369,15 @@ class TournamentService:
             data.kills_b,
             data.deaths_a,
             data.deaths_b,
-            data.change_reason,
+            winner_team_id=data.winner_team_id,
+            loser_team_id=data.loser_team_id,
+            change_reason=data.change_reason,
             map_results=map_results,
         )
         if match.stage == MatchStage.GROUP_STAGE and match.group_id:
             await self._recalculate_group_standings(tournament_id, match.group_id)
+            if match.scheduled_date:
+                await self._recalculate_daily_standings(tournament_id, match.group_id, match.scheduled_date.isoformat())
         elif match.stage == MatchStage.KNOCKOUT and match.bracket_id:
             await self._recalculate_group_standings(tournament_id, match.group_id) if match.group_id else None
         return match
@@ -419,11 +437,14 @@ class TournamentService:
                     "win": win,
                     "loss": loss,
                     "kill": kill,
-                    "death": death,
-                    "kill_difference": kill_difference,
-                    "points": points,
-                }
-            )
+                     "death": death,
+                     "kill_difference": kill_difference,
+                     "points": points,
+                 }
+             )
+
+    async def _recalculate_daily_standings(self, tournament_id: str, group_id: str, match_date: str):
+        await self.standings_service.recalculate_daily_standings(tournament_id, group_id, match_date)
 
     async def override_standings(self, tournament_id: str, group_id: str, data: List[StandingsOverride], actor: Optional[str] = None) -> List[GroupStanding]:
         tournament = await self.tournament_repo.get_by_id(tournament_id)

@@ -235,6 +235,31 @@ class GroupStanding(Base):
     )
 
 
+class DailyStanding(Base):
+    __tablename__ = "daily_standings"
+
+    id = Column(String, primary_key=True, default=uuid_str, index=True)
+    tournament_id = Column(String, ForeignKey("tournaments.id", ondelete="CASCADE"), nullable=False, index=True)
+    group_id = Column(String, ForeignKey("tournament_groups.id", ondelete="CASCADE"), nullable=True, index=True)
+    team_id = Column(String, nullable=False, index=True)
+    match_date = Column(Date, nullable=False, index=True)
+    played = Column(Integer, nullable=False, default=0)
+    win = Column(Integer, nullable=False, default=0)
+    loss = Column(Integer, nullable=False, default=0)
+    kill = Column(Integer, nullable=False, default=0)
+    death = Column(Integer, nullable=False, default=0)
+    kill_difference = Column(Integer, nullable=False, default=0)
+    points = Column(Integer, nullable=False, default=0)
+    computed_at = Column(DateTime, default=datetime.utcnow)
+
+    tournament = relationship("Tournament")
+    group = relationship("TournamentGroup")
+
+    __table_args__ = (
+        UniqueConstraint("tournament_id", "group_id", "team_id", "match_date", name="uq_daily_standing"),
+    )
+
+
 class KnockoutBracket(Base):
     __tablename__ = "knockout_brackets"
 

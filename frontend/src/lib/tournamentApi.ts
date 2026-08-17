@@ -251,7 +251,7 @@ export async function adminDeleteMatch(token: string, tournamentId: string, matc
   }
 }
 
-export async function adminSubmitMatchResult(token: string, tournamentId: string, matchId: string, data: { score_a: number; score_b: number; kills_a?: number; kills_b?: number; deaths_a?: number; deaths_b?: number; change_reason?: string; map_results?: Array<{ map_number: number; team_a_id?: string; team_b_id?: string; score_a?: number; score_b?: number; kills_a?: number; kills_b?: number; deaths_a?: number; deaths_b?: number; winner_team_id?: string; status?: string }> }): Promise<MatchResponse> {
+export async function adminSubmitMatchResult(token: string, tournamentId: string, matchId: string, data: { score_a: number; score_b: number; kills_a?: number; kills_b?: number; deaths_a?: number; deaths_b?: number; winner_team_id?: string; loser_team_id?: string; change_reason?: string; map_results?: Array<{ map_number: number; team_a_id?: string; team_b_id?: string; score_a?: number; score_b?: number; kills_a?: number; kills_b?: number; deaths_a?: number; deaths_b?: number; winner_team_id?: string; status?: string }> }): Promise<MatchResponse> {
   const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/matches/${encodeURIComponent(matchId)}/result`, {
     method: 'POST',
     headers: {
