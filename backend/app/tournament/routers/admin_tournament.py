@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Header, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
-from typing import List, Optional
+from typing import Dict, List, Optional
 import json
 
 from app.database import get_db
@@ -174,98 +174,104 @@ async def list_available_teams(tournament_id: str, x_user_token: Optional[str] =
 @router.post("/{tournament_id}/groups/auto-assign")
 async def auto_assign_groups(tournament_id: str, x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)):
     _ = get_admin_user(x_user_token)
-    from app.tournament.services.group_service import GroupService
-    from app.repositories.team_repository import TeamRepository
-    from app.repositories.participant_repository import ParticipantRepository
-    from collections import defaultdict
+    try:
+        from app.tournament.services.group_service import GroupService
+        from app.repositories.team_repository import TeamRepository
+        from app.repositories.participant_repository import ParticipantRepository
 
-    group_service = GroupService(db)
-    team_repo = TeamRepository(db)
-    participant_repo = ParticipantRepository(db)
+        group_service = GroupService(db)
+        team_repo = TeamRepository(db)
+        participant_repo = ParticipantRepository(db)
 
-    tournament = await group_service.tournament_repo.get_by_id(tournament_id)
-    if not tournament:
-        raise HTTPException(status_code=404, detail="Tournament not found")
+        tournament = await group_service.tournament_repo.get_by_id(tournament_id)
+        if not tournament:
+            raise HTTPException(status_code=404, detail="Tournament not found")
 
-    tournament_teams = await group_service.team_repo.get_by_tournament(tournament_id)
-    if not tournament_teams:
-        raise HTTPException(status_code=400, detail="No teams in tournament")
+        tournament_teams = await group_service.team_repo.get_by_tournament(tournament_id)
+        if not tournament_teams:
+            raise HTTPException(status_code=400, detail="No teams in tournament")
 
-    groups = await group_service.group_repo.get_by_tournament(tournament_id)
-    if not groups:
-        raise HTTPException(status_code=400, detail="No groups created. Create groups first.")
+        groups = await group_service.group_repo.get_by_tournament(tournament_id)
+        if not groups:
+            raise HTTPException(status_code=400, detail="No groups created. Create groups first.")
 
-    team_skills = []
-    for tt in tournament_teams:
-        members = await team_repo.get_members_by_version(tt.team_version_id)
-        player_ids = [m.player_id for m in members if m.player_id]
-        participants = await participant_repo.get_by_ids(player_ids)
-        participants_map = {p.id: p for p in participants}
-        total_skill = 0.0
-        count = 0
-        for m in members:
-            p = participants_map.get(m.player_id)
-            if p and p.skill_score is not None:
-                total_skill += p.skill_score
-                count += 1
-        avg_skill = total_skill / count if count > 0 else 0.0
-        team_skills.append({
-            "team_id": tt.team_id,
-            "tournament_team_id": tt.id,
-            "skill_score": avg_skill,
-        })
+        team_skills = []
+        for tt in tournament_teams:
+            try:
+                members = await team_repo.get_members_by_version(tt.team_version_id)
+                player_ids = [m.player_id for m in members if m.player_id]
+                if not player_ids:
+                    team_skills.append({
+                        "team_id": tt.team_id,
+                        "tournament_team_id": tt.id,
+                        "skill_score": 0.0,
+                    })
+                    continue
+                participants = await participant_repo.get_by_ids(player_ids)
+                participants_map = {p.id: p for p in participants}
+                total_skill = 0.0
+                count = 0
+                for m in members:
+                    p = participants_map.get(m.player_id)
+                    if p and p.skill_score is not None:
+                        total_skill += p.skill_score
+                        count += 1
+                avg_skill = total_skill / count if count > 0 else 0.0
+                team_skills.append({
+                    "team_id": tt.team_id,
+                    "tournament_team_id": tt.id,
+                    "skill_score": avg_skill,
+                })
+            except Exception:
+                team_skills.append({
+                    "team_id": tt.team_id,
+                    "tournament_team_id": tt.id,
+                    "skill_score": 0.0,
+                })
 
-    team_skills.sort(key=lambda x: x["skill_score"], reverse=True)
+        if not team_skills:
+            raise HTTPException(status_code=400, detail="No valid team data")
 
-    group_count = len(groups)
-    teams_per_group = len(team_skills) // group_count
-    remainder = len(team_skills) % group_count
+        team_skills.sort(key=lambda x: x["skill_score"], reverse=True)
 
-    assignments: Dict[str, List[str]] = {g.id: [] for g in groups}
-    snake = False
-    group_idx = 0
-    direction = 1
-    for i, team in enumerate(team_skills):
-        if group_count == 1:
-            assignments[groups[0].id].append(team["tournament_team_id"])
-        else:
-            assignments[groups[group_idx].id].append(team["tournament_team_id"])
-        if not snake:
-            group_idx += direction
-            if group_idx == group_count - 1:
-                snake = True
-                direction = -1
-            elif group_idx == 0 and i > 0:
-                snake = True
-                direction = 1
-        else:
-            group_idx += direction
-            if group_idx == group_count - 1:
-                snake = False
-                direction = -1
-            elif group_idx == 0:
-                snake = False
-                direction = 1
+        group_count = len(groups)
+        assignments: Dict[str, List[str]] = {g.id: [] for g in groups}
 
-    result = []
-    for group in groups:
-        await group_service.group_member_repo.delete_by_group(group.id)
-        for seed_idx, tournament_team_id in enumerate(assignments[group.id], 1):
-            await group_service.group_member_repo.create(
-                {
-                    "group_id": group.id,
-                    "tournament_team_id": tournament_team_id,
-                    "seed": seed_idx,
-                }
-            )
-        members = await group_service.group_member_repo.get_by_group(group.id)
-        result.append({
-            "id": group.id,
-            "name": group.name,
-            "assigned_count": len(members),
-        })
+        for i, team in enumerate(team_skills):
+            if group_count == 1:
+                assignments[groups[0].id].append(team["tournament_team_id"])
+            else:
+                round_num = i // group_count
+                pos_in_round = i % group_count
+                is_reverse = round_num % 2 == 1
+                group_idx = (group_count - 1 - pos_in_round) if is_reverse else pos_in_round
+                assignments[groups[group_idx].id].append(team["tournament_team_id"])
 
-    return {"groups": result}
+        result = []
+        for group in groups:
+            await group_service.group_member_repo.delete_by_group(group.id)
+            for seed_idx, tournament_team_id in enumerate(assignments[group.id], 1):
+                await group_service.group_member_repo.create(
+                    {
+                        "group_id": group.id,
+                        "tournament_team_id": tournament_team_id,
+                        "seed": seed_idx,
+                    }
+                )
+            members = await group_service.group_member_repo.get_by_group(group.id)
+            result.append({
+                "id": group.id,
+                "name": group.name,
+                "assigned_count": len(members),
+            })
+
+        return {"groups": result}
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Auto-assign failed: {type(e).__name__}: {e}")
 
 
 @router.get("/{tournament_id}/groups")
