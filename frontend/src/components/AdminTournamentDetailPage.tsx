@@ -108,7 +108,7 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
     try {
       const count = Math.max(1, groupCount || 1)
       for (let i = 0; i < count; i++) {
-        const name = count === 1 && newGroupName.trim() ? newGroupName.trim() : `${groupPrefix}${String.fromCharCode(65 + i)}`
+        const name = count === 1 && newGroupName.trim() ? newGroupName.trim() : `Group ${i + 1}`
         await adminCreateGroup(token, tournamentId, { name, team_ids: [] })
       }
       setNewGroupName('')
@@ -303,7 +303,7 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
                 <div>
                   <label className="mb-1 block text-sm font-medium text-gray-300">Preview Nama Group</label>
                   <p className="text-xs text-gray-400">
-                    {Array.from({ length: groupCount }).map((_, i) => `${groupPrefix}${String.fromCharCode(65 + i)}`).join(', ')}
+                    {Array.from({ length: groupCount }).map((_, i) => `${groupPrefix}${i + 1}`).join(', ')}
                   </p>
                 </div>
                 <div className="flex gap-2">

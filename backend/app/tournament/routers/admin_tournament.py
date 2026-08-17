@@ -208,15 +208,19 @@ async def auto_assign_groups(tournament_id: str, x_user_token: Optional[str] = H
 
         tournament_teams = await group_service.team_repo.get_by_tournament(tournament_id)
         if not tournament_teams:
-            if not tournament.selected_team_version_id:
-                raise HTTPException(status_code=400, detail="No teams in tournament. Select a team version first.")
-            version_members = await team_repo.get_members_by_version(tournament.selected_team_version_id)
+            version_id = tournament.selected_team_version_id
+            if not version_id:
+                latest_version = await team_repo.get_active()
+                if not latest_version:
+                    raise HTTPException(status_code=400, detail="No teams in tournament. Generate or select a team version first.")
+                version_id = latest_version.id
+            version_members = await team_repo.get_members_by_version(version_id)
             team_ids = sorted({m.team_id for m in version_members if m.team_id})
             for idx, team_id in enumerate(team_ids):
                 await group_service.team_repo.create(
                     {
                         "tournament_id": tournament_id,
-                        "team_version_id": tournament.selected_team_version_id,
+                        "team_version_id": version_id,
                         "team_id": team_id,
                         "seed": idx + 1,
                     }
