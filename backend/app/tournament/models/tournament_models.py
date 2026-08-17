@@ -3,8 +3,7 @@ from sqlalchemy.orm import declarative_base, relationship
 from datetime import datetime
 from uuid import uuid4
 
-Base = declarative_base()
-
+from app.models.models import Base
 
 def uuid_str():
     return str(uuid4())
