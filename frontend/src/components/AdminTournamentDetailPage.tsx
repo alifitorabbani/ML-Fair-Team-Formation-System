@@ -27,6 +27,8 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
   const [newGroupName, setNewGroupName] = useState('')
   const [creatingGroup, setCreatingGroup] = useState(false)
   const [groupError, setGroupError] = useState<string | null>(null)
+  const [groupCount, setGroupCount] = useState<number>(2)
+  const [groupPrefix, setGroupPrefix] = useState<string>('Group ')
 
   const load = async () => {
     if (!token) return
@@ -100,14 +102,21 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
   }
 
   const handleCreateGroup = async () => {
-    if (!token || !newGroupName.trim()) return
+    if (!token) return
     setCreatingGroup(true)
     setGroupError(null)
     try {
-      await adminCreateGroup(token, tournamentId, { name: newGroupName.trim(), team_ids: [] })
+      const count = Math.max(1, groupCount || 1)
+      for (let i = 0; i < count; i++) {
+        const name = count === 1 && newGroupName.trim() ? newGroupName.trim() : `${groupPrefix}${String.fromCharCode(65 + i)}`
+        await adminCreateGroup(token, tournamentId, { name, team_ids: [] })
+      }
       setNewGroupName('')
       setShowCreateGroup(false)
+      setGroupCount(2)
+      setGroupPrefix('Group ')
       load()
+      setMessage(count === 1 ? 'Group berhasil dibuat' : `${count} group berhasil dibuat`)
     } catch (err) {
       setGroupError(err instanceof Error ? err.message : 'Gagal membuat group')
     } finally {
@@ -269,28 +278,44 @@ export default function AdminTournamentDetailPage({ tournamentId, onBack }: { to
           {showCreateGroup && (
             <Card>
               <div className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-300">Jumlah Group</label>
+                    <input
+                      type="number"
+                      min={1}
+                      value={groupCount}
+                      onChange={(e) => setGroupCount(parseInt(e.target.value || '1', 10))}
+                      className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-4 py-2 text-sm text-white placeholder-gray-500 focus:border-brand-500 focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-gray-300">Awalan Nama Group</label>
+                    <input
+                      type="text"
+                      value={groupPrefix}
+                      onChange={(e) => setGroupPrefix(e.target.value)}
+                      className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-4 py-2 text-sm text-white placeholder-gray-500 focus:border-brand-500 focus:outline-none"
+                      placeholder="Contoh: Group "
+                    />
+                  </div>
+                </div>
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-300">Nama Group</label>
-                  <input
-                    type="text"
-                    value={newGroupName}
-                    onChange={(e) => setNewGroupName(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleCreateGroup()}
-                    className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-4 py-2 text-sm text-white placeholder-gray-500 focus:border-brand-500 focus:outline-none"
-                    placeholder="Contoh: Group A"
-                    autoFocus
-                  />
+                  <label className="mb-1 block text-sm font-medium text-gray-300">Preview Nama Group</label>
+                  <p className="text-xs text-gray-400">
+                    {Array.from({ length: groupCount }).map((_, i) => `${groupPrefix}${String.fromCharCode(65 + i)}`).join(', ')}
+                  </p>
                 </div>
                 <div className="flex gap-2">
                   <button
                     onClick={handleCreateGroup}
-                    disabled={creatingGroup || !newGroupName.trim()}
+                    disabled={creatingGroup || groupCount < 1}
                     className="rounded-xl bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-500 disabled:opacity-50"
                   >
-                    {creatingGroup ? 'Menyimpan...' : 'Buat Group'}
+                    {creatingGroup ? 'Menyimpan...' : `Buat ${groupCount} Group`}
                   </button>
                   <button
-                    onClick={() => { setShowCreateGroup(false); setNewGroupName('') }}
+                    onClick={() => { setShowCreateGroup(false); setNewGroupName(''); setGroupCount(2); setGroupPrefix('Group ') }}
                     className="rounded-xl border border-white/10 px-4 py-2 text-sm text-gray-400 hover:text-white"
                   >
                     Batal
