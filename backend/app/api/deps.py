@@ -26,15 +26,15 @@ def decode_token(token: str) -> dict:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
-async def get_current_user(x_user_token: str = Header(None)) -> dict:
+def get_current_user(x_user_token: str = Header(None)) -> dict:
     if not x_user_token:
         raise HTTPException(status_code=401, detail="Unauthorized")
     payload = decode_token(x_user_token)
     return payload
 
 
-async def get_admin_user(x_user_token: str = Header(None)) -> dict:
-    user = await get_current_user(x_user_token)
+def get_admin_user(x_user_token: str = Header(None)) -> dict:
+    user = get_current_user(x_user_token)
     if user.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Forbidden")
     return user

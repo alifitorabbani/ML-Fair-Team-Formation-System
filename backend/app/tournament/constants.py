@@ -52,8 +52,8 @@ class BracketLoserRule(str):
 
 
 VALID_TRANSITIONS = {
-    TournamentStatus.DRAFT: [TournamentStatus.CONFIGURED, TournamentStatus.CANCELLED],
-    TournamentStatus.CONFIGURED: [TournamentStatus.TEAMS_LOCKED, TournamentStatus.DRAFT],
+    TournamentStatus.DRAFT: [TournamentStatus.CONFIGURED, TournamentStatus.GROUPS_CONFIGURED, TournamentStatus.CANCELLED],
+    TournamentStatus.CONFIGURED: [TournamentStatus.TEAMS_LOCKED, TournamentStatus.DRAFT, TournamentStatus.GROUPS_CONFIGURED],
     TournamentStatus.TEAMS_LOCKED: [TournamentStatus.GROUPS_CONFIGURED, TournamentStatus.CONFIGURED],
     TournamentStatus.GROUPS_CONFIGURED: [TournamentStatus.SCHEDULE_GENERATED, TournamentStatus.TEAMS_LOCKED],
     TournamentStatus.SCHEDULE_GENERATED: [TournamentStatus.GROUP_STAGE, TournamentStatus.GROUPS_CONFIGURED],
