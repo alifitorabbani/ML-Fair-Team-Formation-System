@@ -9,7 +9,7 @@ import ErrorMessage from '@/components/shared/ErrorMessage'
 import Card from '@/components/shared/Card'
 import { ArrowLeft, Save, Users, Calendar, ClipboardList, GitBranch, Trophy } from 'lucide-react'
 
-type Tab = 'config' | 'groups' | 'schedule' | 'matches' | 'knockout' | 'results'
+type Tab = 'config' | 'groups' | 'schedule' | 'matches' | 'standings' | 'knockout' | 'results'
 
 export default function AdminTournamentDetailPage({ tournamentId, onBack }: { tournamentId: string; onBack: () => void }) {
   const token = useAuthToken()

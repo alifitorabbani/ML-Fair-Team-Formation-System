@@ -201,12 +201,14 @@ export default function Home() {
               {isAdmin ? 'Perankingan' : '1. Perankingan'}
             </NavButton>
             {isAdmin && (
-              <NavButton active={currentPage === 'admin'} onClick={() => setCurrentPage('admin')}>
-                Dashboard Admin
-              </NavButton>
-              <NavButton active={currentPage === 'admin-tournaments'} onClick={() => { setSelectedAdminTournamentId(null); setCurrentPage('admin-tournaments'); }}>
-                Turnamen
-              </NavButton>
+              <>
+                <NavButton active={currentPage === 'admin'} onClick={() => setCurrentPage('admin')}>
+                  Dashboard Admin
+                </NavButton>
+                <NavButton active={currentPage === 'admin-tournaments'} onClick={() => { setSelectedAdminTournamentId(null); setCurrentPage('admin-tournaments'); }}>
+                  Turnamen
+                </NavButton>
+              </>
             )}
             {!isAdmin && rankingAvailable && (
               <NavButton active={currentPage === 'payment'} onClick={() => setCurrentPage('payment')}>
