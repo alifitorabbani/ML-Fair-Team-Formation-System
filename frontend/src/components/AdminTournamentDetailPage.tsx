@@ -1415,51 +1415,6 @@ function GroupCard({ token, tournamentId, group, onUpdated }: { token: string | 
               ))}
             </div>
           )}
-          {standings.length > 0 && (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-white/10 text-left text-xs text-gray-400">
-                    <th className="pb-1 pr-2">#</th>
-                    <th className="pb-1 pr-2">Tim</th>
-                    <th className="pb-1 pr-2">P</th>
-                    <th className="pb-1 pr-2">W</th>
-                    <th className="pb-1 pr-2">L</th>
-                    <th className="pb-1 pr-2">K</th>
-                    <th className="pb-1 pr-2">D</th>
-                    <th className="pb-1 pr-2">KD</th>
-                    <th className="pb-1 pr-2">WR</th>
-                    <th className="pb-1">Pts</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {standings.map((s: any) => {
-                    const winRate = s.played > 0 ? ((s.win / s.played) * 100).toFixed(1) : '0.0'
-                    const rank = s.rank || 999
-                    const isUpper = rank >= 1 && rank <= 4
-                    const isLower = rank >= 5 && rank <= 8
-                    const isEliminated = rank > 8
-                    const rowClass = isUpper ? 'bg-blue-500/5' : isLower ? 'bg-green-500/5' : isEliminated ? 'bg-red-500/5' : ''
-                    const nameClass = isUpper ? 'text-blue-300' : isLower ? 'text-green-300' : isEliminated ? 'text-red-300' : 'text-white'
-                    return (
-                      <tr key={s.team_id} className={`border-b border-white/5 ${rowClass}`}>
-                        <td className="py-1 pr-2 text-gray-300">{s.rank || '-'}</td>
-                        <td className={`py-1 pr-2 ${nameClass}`}>{s.team_name || s.team_id}</td>
-                        <td className="py-1 pr-2 text-gray-300">{s.played}</td>
-                        <td className="py-1 pr-2 text-green-400">{s.win}</td>
-                        <td className="py-1 pr-2 text-red-400">{s.loss}</td>
-                        <td className="py-1 pr-2 text-gray-300">{s.kill}</td>
-                        <td className="py-1 pr-2 text-gray-300">{s.death}</td>
-                        <td className="py-1 pr-2 text-gray-300">{s.kill_difference > 0 ? '+' : ''}{s.kill_difference}</td>
-                        <td className="py-1 pr-2 text-gray-300">{winRate}%</td>
-                        <td className={`py-1 font-semibold ${isUpper ? 'text-blue-300' : isLower ? 'text-green-300' : isEliminated ? 'text-red-300' : 'text-white'}`}>{s.points}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
           {loadingStandings && <p className="text-xs text-gray-500">Memuat klasemen...</p>}
         </div>
       ) : (
