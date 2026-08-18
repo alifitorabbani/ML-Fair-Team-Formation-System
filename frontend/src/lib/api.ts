@@ -22,6 +22,10 @@ const API_BASE = (() => {
   return ''
 })()
 
+if (typeof window !== 'undefined') {
+  console.info('[api] NEXT_PUBLIC_API_URL=', process.env.NEXT_PUBLIC_API_URL, 'API_BASE=', API_BASE)
+}
+
 function isAbortError(err: unknown): boolean {
   return err instanceof Error && err.name === 'AbortError'
 }
@@ -47,6 +51,7 @@ async function fetchJSON(url: string, init?: RequestInit & { timeoutMs?: number 
     return await response.json()
   } catch (err) {
     if (isAbortError(err)) {
+      console.warn(`[api] Request timeout after ${timeoutMs}ms: ${url}`)
       throw new Error(`Request timeout after ${timeoutMs}ms`)
     }
     throw err
@@ -85,6 +90,7 @@ async function getJSONWithRetry<T>(url: string, token?: string, timeoutMs = 15_0
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err))
       if (attempt < retries && isAbortError(lastError)) {
+        console.warn(`[api] Retrying ${url} after timeout...`)
         await new Promise(resolve => setTimeout(resolve, 500))
         continue
       }
@@ -135,20 +141,20 @@ function setCachedSystemState(value: SystemStateResponse) {
 }
 
 export async function login(email: string): Promise<LoginResponse> {
-  return postJSON<LoginResponse>(`${API_BASE}/api/login`, { email }, undefined, 30_000)
+  return postJSON<LoginResponse>(`${API_BASE}/api/login`, { email }, undefined, 60_000)
 }
 
 export async function getSystemState(): Promise<SystemStateResponse> {
   const cached = getCachedSystemState()
   if (cached) return cached
 
-  const data = await getJSONWithRetry<SystemStateResponse>(`${API_BASE}/api/system-state`, undefined, 20_000, 1)
+  const data = await getJSONWithRetry<SystemStateResponse>(`${API_BASE}/api/system-state`, undefined, 60_000, 1)
   setCachedSystemState(data)
   return data
 }
 
 export async function getConfig(): Promise<any> {
-  return getJSONWithRetry(`${API_BASE}/api/config`, undefined, 20_000, 1)
+  return getJSONWithRetry(`${API_BASE}/api/config`, undefined, 60_000, 1)
 }
 
 export async function getMyRanking(token: string): Promise<{ rank: number; total: number; player: any }> {
