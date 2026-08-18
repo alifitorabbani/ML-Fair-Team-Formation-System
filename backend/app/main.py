@@ -190,57 +190,81 @@ async def lifespan(app: FastAPI):
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-            await conn.execute(
-                text("CREATE INDEX IF NOT EXISTS ix_payments_created_at ON payments(created_at DESC)")
-            )
-            await conn.execute(
-                text("CREATE INDEX IF NOT EXISTS ix_team_members_team_id ON team_members(team_id)")
-            )
-            await conn.execute(
-                text("CREATE INDEX IF NOT EXISTS ix_participants_status_rank ON participants(status, rank)")
-            )
-            await conn.execute(
-                text("CREATE INDEX IF NOT EXISTS ix_payments_status_created_at ON payments(status, created_at DESC)")
-            )
-            await conn.execute(
-                text("CREATE INDEX IF NOT EXISTS ix_team_members_version_team ON team_members(team_version_id, team_id)")
-            )
-            await conn.execute(
-                text("CREATE INDEX IF NOT EXISTS ix_audit_logs_action_timestamp ON audit_logs(action, timestamp DESC)")
-            )
-            await conn.execute(
-                text("ALTER TABLE matches ADD COLUMN IF NOT EXISTS next_match_id VARCHAR NULL")
-            )
-            await conn.execute(
-                text("ALTER TABLE matches ADD COLUMN IF NOT EXISTS loser_next_match_id VARCHAR NULL")
-            )
-            await conn.execute(
-                text("CREATE INDEX IF NOT EXISTS ix_matches_next_match_id ON matches(next_match_id)")
-            )
-            await conn.execute(
-                text("CREATE INDEX IF NOT EXISTS ix_matches_loser_next_match_id ON matches(loser_next_match_id)")
-            )
-            await conn.execute(
-                text("ALTER TABLE matches ADD COLUMN IF NOT EXISTS participant_source_a VARCHAR NULL")
-            )
-            await conn.execute(
-                text("ALTER TABLE matches ADD COLUMN IF NOT EXISTS participant_source_b VARCHAR NULL")
-            )
-            await conn.execute(
-                text("ALTER TABLE tournament_teams ADD COLUMN IF NOT EXISTS is_eliminated BOOLEAN DEFAULT 0 NOT NULL")
-            )
-            await conn.execute(
-                text("ALTER TABLE bracket_match_maps ADD COLUMN IF NOT EXISTS scheduled_date VARCHAR NULL")
-            )
-            await conn.execute(
-                text("ALTER TABLE bracket_match_maps ADD COLUMN IF NOT EXISTS start_time VARCHAR NULL")
-            )
-            await conn.execute(
-                text("ALTER TABLE bracket_match_maps ADD COLUMN IF NOT EXISTS end_time VARCHAR NULL")
-            )
+            # Run Alembic migrations if available
+            try:
+                from alembic.config import Config
+                from alembic.runtime.environment import EnvironmentContext
+                from alembic.script import ScriptDirectory
+                import os
+                
+                alembic_cfg = Config(os.path.join(os.path.dirname(os.path.abspath(__file__)), "alembic.ini"))
+                alembic_cfg.set_main_option("sqlalchemy.url", str(engine.url))
+                
+                script = ScriptDirectory.from_config(alembic_cfg)
+                env = EnvironmentContext(alembic_cfg, script)
+                
+                def run_migrations(connection):
+                    env.configure(connection=connection, target_metadata=Base.metadata)
+                    with env.begin_transaction():
+                        env.run_migrations()
+                
+                await conn.run_sync(run_migrations)
+                print("Alembic migrations applied successfully.")
+            except Exception as alembic_err:
+                print(f"Alembic migration skipped or failed: {alembic_err}")
+                # Fallback to raw ALTER TABLE statements
+                migration_errors = []
+                migrations = [
+                    ("ALTER TABLE matches ADD COLUMN IF NOT EXISTS next_match_id VARCHAR NULL", "matches.next_match_id"),
+                    ("ALTER TABLE matches ADD COLUMN IF NOT EXISTS loser_next_match_id VARCHAR NULL", "matches.loser_next_match_id"),
+                    ("ALTER TABLE matches ADD COLUMN IF NOT EXISTS participant_source_a VARCHAR NULL", "matches.participant_source_a"),
+                    ("ALTER TABLE matches ADD COLUMN IF NOT EXISTS participant_source_b VARCHAR NULL", "matches.participant_source_b"),
+                    ("ALTER TABLE tournament_teams ADD COLUMN IF NOT EXISTS is_eliminated BOOLEAN DEFAULT FALSE NOT NULL", "tournament_teams.is_eliminated"),
+                    ("ALTER TABLE bracket_match_maps ADD COLUMN IF NOT EXISTS scheduled_date VARCHAR NULL", "bracket_match_maps.scheduled_date"),
+                    ("ALTER TABLE bracket_match_maps ADD COLUMN IF NOT EXISTS start_time VARCHAR NULL", "bracket_match_maps.start_time"),
+                    ("ALTER TABLE bracket_match_maps ADD COLUMN IF NOT EXISTS end_time VARCHAR NULL", "bracket_match_maps.end_time"),
+                ]
+                for sql, column in migrations:
+                    try:
+                        await conn.execute(text(sql))
+                        print(f"Fallback migration OK: {column}")
+                    except Exception as e:
+                        msg = f"Fallback migration failed for {column}: {e}"
+                        migration_errors.append(msg)
+                        print(msg)
+                if migration_errors:
+                    print("Some migrations failed. The app will continue, but some features may not work correctly.")
+            try:
+                async with engine.begin() as conn:
+                    await verify_critical_columns(conn)
+            except Exception as e:
+                print(f"Startup warning: critical column verification failed: {e}")
     except Exception as e:
-        print(f"Startup warning: database initialization failed: {e}")
+        print(f"Startup error: database initialization failed: {e}")
     yield
+
+
+async def verify_critical_columns(conn):
+    """Verify critical columns exist after migration."""
+    critical_columns = {
+        "tournament_teams": ["is_eliminated"],
+        "bracket_match_maps": ["scheduled_date", "start_time", "end_time"],
+        "matches": ["next_match_id", "loser_next_match_id", "participant_source_a", "participant_source_b"],
+    }
+    missing = []
+    for table, columns in critical_columns.items():
+        for column in columns:
+            try:
+                result = await conn.execute(
+                    text(f"SELECT {column} FROM {table} LIMIT 1")
+                )
+            except Exception as e:
+                missing.append(f"{table}.{column}: {e}")
+    if missing:
+        print(f"CRITICAL: Missing columns after migration: {missing}")
+        print("The application may not work correctly. Please run database migrations.")
+    else:
+        print("All critical columns verified.")
 
 
 app = FastAPI(
