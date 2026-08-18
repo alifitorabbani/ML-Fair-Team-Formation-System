@@ -10,14 +10,12 @@ import UserRankingCard from '@/components/shared/UserRankingCard'
 import { LANE_COLORS, LANE_ICONS } from '@/lib/constants'
 import { useAuthToken, useUserSession } from '@/lib/hooks/useAuth'
 
-function getUserRole(): 'admin' | 'user' | null {
-  const session = useUserSession()
-  return session?.role || null
-}
-
 const pct = (val: number, total: number) => (total > 0 ? `${((val / total) * 100).toFixed(1)}%` : '0.0%')
 
 export default function RankingsPage() {
+  const token = useAuthToken()
+  const session = useUserSession()
+  const role = session?.role || null
   const [rankings, setRankings] = useState<any[]>([])
   const [myRanking, setMyRanking] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -27,9 +25,7 @@ export default function RankingsPage() {
   const [expandedPlayer, setExpandedPlayer] = useState<string | null>(null)
   const [showStatus, setShowStatus] = useState(true)
   const [page, setPage] = useState(0)
-  const pageSize = 9999
-  const role = getUserRole()
-  const token = useAuthToken()
+  const pageSize = 50
 
   useEffect(() => {
     if (!role || !token) return

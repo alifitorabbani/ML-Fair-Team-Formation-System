@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { isAdminError, clearSession } from '@/lib/api'
 import {
   adminGetDashboard,
@@ -26,6 +26,8 @@ import { SystemStateBadge } from '@/components/shared/StatusBadge'
 import { useAuthToken } from '@/lib/hooks/useAuth'
 
 type Tab = 'overview' | 'rankings' | 'teams' | 'payments' | 'audit'
+
+const DASHBOARD_TIMEOUT_MS = 20_000
 
 export default function AdminDashboard({
   onNavigateToRankings,
@@ -62,8 +64,15 @@ export default function AdminDashboard({
   const [verifyError, setVerifyError] = useState<string | null>(null)
   const [verifySuccess, setVerifySuccess] = useState<string | null>(null)
   const unpaidCount = payments.filter((p) => p.status !== 'PAID').length
+  const abortControllerRef = useRef<AbortController | null>(null)
 
   const loadDashboard = async () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+
     setLoading(true)
     try {
       const [dashboardRes, paymentsRes, auditRes, rankingVersionsRes, teamVersionsRes] = await Promise.all([
@@ -73,25 +82,34 @@ export default function AdminDashboard({
         adminGetRankingVersions(token || ''),
         adminGetTeamVersions(token || ''),
       ])
+      if (controller.signal.aborted) return
       setStats(dashboardRes)
       setPayments(paymentsRes.payments || [])
       setAuditLogs(auditRes.logs || [])
       setRankingVersions(rankingVersionsRes.versions || [])
       setTeamVersions(teamVersionsRes.versions || [])
     } catch (err) {
+      if (controller.signal.aborted) return
       console.error('Failed to load dashboard:', err)
       if (isAdminError(err)) {
         clearSession()
         window.location.reload()
       }
     } finally {
-      setLoading(false)
+      if (!controller.signal.aborted) {
+        setLoading(false)
+      }
     }
   }
 
   useEffect(() => {
     if (token) {
       loadDashboard()
+    }
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort()
+      }
     }
   }, [token])
 

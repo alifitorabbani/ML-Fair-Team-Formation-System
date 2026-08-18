@@ -1,8 +1,8 @@
+import json
+import ast
 from typing import List, Optional, Dict, Any
 from uuid import uuid4
 from datetime import datetime
-import json
-import ast
 import os
 from app.repositories.participant_repository import ParticipantRepository
 from app.repositories.ranking_repository import RankingRepository
@@ -15,6 +15,18 @@ from app.schemas.schemas import (
     ParticipantStatus, SystemState as SystemStateEnum,
 )
 from app.config.settings import settings
+
+
+def _parse_safe_json_or_literal(value: Optional[str]) -> Any:
+    if not value:
+        return None
+    try:
+        return json.loads(value)
+    except (json.JSONDecodeError, TypeError):
+        try:
+            return ast.literal_eval(value)
+        except Exception:
+            return None
 
 
 def _get_master_csv_path() -> str:
@@ -234,7 +246,7 @@ class RankingService:
             eliminated_count=eliminated_count,
             generated_by=actor,
             seed=42,
-            score_components=str(score_components),
+            score_components=json.dumps(score_components),
         )
 
         await self.audit_repo.create(
@@ -405,12 +417,7 @@ class RankingService:
                 },
             ).model_dump())
 
-        score_components = None
-        if active_ranking.score_components:
-            try:
-                score_components = eval(active_ranking.score_components)
-            except Exception:
-                score_components = None
+        score_components = _parse_safe_json_or_literal(active_ranking.score_components)
 
         return {
             "rankings": ranked_response,

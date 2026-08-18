@@ -10,21 +10,59 @@ import {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? ''
 
-export async function login(email: string): Promise<LoginResponse> {
-  const response = await fetch(`${API_BASE}/api/login`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ email }),
-  })
+function timeout<T>(ms: number, fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), ms)
+  return fn(controller.signal).finally(() => clearTimeout(timer))
+}
+
+async function fetchJSON(url: string, init?: RequestInit & { timeoutMs?: number }): Promise<any> {
+  const { timeoutMs = 15_000, ...rest } = init || {}
+  const response = await timeout(timeoutMs, (signal) =>
+    fetch(url, { ...rest, signal }),
+  )
 
   if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Login failed')
+    const error = await response.json().catch(() => ({}))
+    throw new Error((error as any)?.detail || `Request failed: ${response.status}`)
   }
 
   return response.json()
+}
+
+async function postJSON<T>(url: string, body: unknown, token?: string, timeoutMs = 15_000): Promise<T> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  }
+  if (token) headers['X-User-Token'] = token
+
+  return fetchJSON(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+    timeoutMs,
+  })
+}
+
+async function getJSON<T>(url: string, token?: string, timeoutMs = 15_000): Promise<T> {
+  const headers: Record<string, string> = {}
+  if (token) headers['X-User-Token'] = token
+
+  return fetchJSON(url, {
+    headers,
+    timeoutMs,
+  })
+}
+
+async function deleteJSON(url: string, token?: string, timeoutMs = 15_000): Promise<any> {
+  const headers: Record<string, string> = {}
+  if (token) headers['X-User-Token'] = token
+
+  return fetchJSON(url, {
+    method: 'DELETE',
+    headers,
+    timeoutMs,
+  })
 }
 
 const SYSTEM_STATE_CACHE_KEY = 'system_state_cache'
@@ -56,352 +94,100 @@ function setCachedSystemState(value: SystemStateResponse) {
   }
 }
 
-function timeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('Request timeout')), ms)
-    promise
-      .then(value => {
-        clearTimeout(timer)
-        resolve(value)
-      })
-      .catch(err => {
-        clearTimeout(timer)
-        reject(err)
-      })
-  })
+export async function login(email: string): Promise<LoginResponse> {
+  return postJSON<LoginResponse>(`${API_BASE}/api/login`, { email })
 }
 
 export async function getSystemState(): Promise<SystemStateResponse> {
   const cached = getCachedSystemState()
   if (cached) return cached
 
-  const response = await timeout(
-    fetch(`${API_BASE}/api/system-state`),
-    10_000,
-  )
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch system state')
-  }
-
-  const data = (await response.json()) as SystemStateResponse
+  const data = await getJSON<SystemStateResponse>(`${API_BASE}/api/system-state`, undefined, 10_000)
   setCachedSystemState(data)
   return data
 }
 
 export async function getConfig(): Promise<any> {
-  const response = await fetch(`${API_BASE}/api/config`)
-
-  if (!response.ok) {
-    throw new Error('Failed to fetch config')
-  }
-
-  return response.json()
+  return getJSON(`${API_BASE}/api/config`)
 }
 
 export async function getMyRanking(token: string): Promise<{ rank: number; total: number; player: any }> {
-  const response = await fetch(`${API_BASE}/api/me/ranking`, {
-    headers: {
-      'X-User-Token': token,
-    },
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Failed to fetch ranking')
-  }
-
-  return response.json()
+  return getJSON(`${API_BASE}/api/me/ranking`, token)
 }
 
 export async function getMyTeam(token: string): Promise<{ team_id: string | null; team: any; message?: string }> {
-  const response = await fetch(`${API_BASE}/api/me/team`, {
-    headers: {
-      'X-User-Token': token,
-    },
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Failed to fetch team')
-  }
-
-  return response.json()
+  return getJSON(`${API_BASE}/api/me/team`, token)
 }
 
 export async function getMyPayment(token: string): Promise<PaymentResponse> {
-  const response = await fetch(`${API_BASE}/api/me/payment`, {
-    headers: {
-      'X-User-Token': token,
-    },
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Failed to fetch payment')
-  }
-
-  return response.json()
+  return getJSON(`${API_BASE}/api/me/payment`, token)
 }
 
 export async function adminProcessParticipants(token: string): Promise<{ message: string; count: number }> {
-  const response = await fetch(`${API_BASE}/api/admin/process-participants`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-User-Token': token,
-    },
-    body: JSON.stringify({}),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Gagal memproses peserta')
-  }
-
-  return response.json()
+  return postJSON(`${API_BASE}/api/admin/process-participants`, {}, token)
 }
 
-export async function adminGenerateRanking(token: string): Promise<any> {
-  const response = await fetch(`${API_BASE}/api/admin/generate-ranking`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-User-Token': token,
-    },
-    body: JSON.stringify({}),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Failed to generate ranking')
-  }
-
-  return response.json()
+export async function adminGenerateRanking(token: string, randomSeed?: number): Promise<any> {
+  return postJSON(`${API_BASE}/api/admin/generate-ranking`, { random_seed: randomSeed }, token, 30_000)
 }
 
 export async function adminRankingPreview(token: string): Promise<any> {
-  const response = await fetch(`${API_BASE}/api/admin/ranking-preview`, {
-    headers: {
-      'X-User-Token': token,
-    },
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Failed to get ranking preview')
-  }
-
-  return response.json()
+  return getJSON(`${API_BASE}/api/admin/ranking-preview`, token, 20_000)
 }
 
 export async function adminGetRankings(token: string): Promise<any> {
-  const response = await fetch(`${API_BASE}/api/admin/rankings`, {
-    headers: {
-      'X-User-Token': token,
-    },
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Failed to fetch rankings')
-  }
-
-  return response.json()
+  return getJSON(`${API_BASE}/api/admin/rankings`, token)
 }
 
 export async function adminConfirmRanking(token: string, rankingVersionId: string): Promise<any> {
-  const response = await fetch(`${API_BASE}/api/admin/confirm-ranking?ranking_version_id=${rankingVersionId}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-User-Token': token,
-    },
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Failed to confirm ranking')
-  }
-
-  return response.json()
+  return postJSON(`${API_BASE}/api/admin/confirm-ranking?ranking_version_id=${encodeURIComponent(rankingVersionId)}`, {}, token)
 }
 
 export async function adminGenerateTeam(token: string, randomSeed?: number): Promise<any> {
-  const response = await fetch(`${API_BASE}/api/admin/generate-team`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-User-Token': token,
-    },
-    body: JSON.stringify({ random_seed: randomSeed }),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Failed to generate team')
-  }
-
-  return response.json()
+  return postJSON(`${API_BASE}/api/admin/generate-team`, { random_seed: randomSeed }, token, 30_000)
 }
 
 export async function adminGetDashboard(token: string): Promise<AdminDashboardStats> {
-  const response = await fetch(`${API_BASE}/api/admin/dashboard`, {
-    headers: {
-      'X-User-Token': token,
-    },
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Failed to fetch dashboard')
-  }
-
-  return response.json()
+  return getJSON(`${API_BASE}/api/admin/dashboard`, token)
 }
 
 export async function adminSeedPayments(token: string): Promise<{ inserted_count: number; total_qualified: number }> {
-  const response = await fetch(`${API_BASE}/api/admin/seed-payments`, {
-    method: 'POST',
-    headers: {
-      'X-User-Token': token,
-    },
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Failed to seed payments')
-  }
-
-  return response.json()
+  return postJSON(`${API_BASE}/api/admin/seed-payments`, {}, token)
 }
 
 export async function adminSyncParticipants(token: string): Promise<{ deleted_count: number; inserted_count: number; updated_count: number; total_participants: number; team_regenerated: boolean; message: string }> {
-  const response = await fetch(`${API_BASE}/api/admin/sync-participants`, {
-    method: 'POST',
-    headers: {
-      'X-User-Token': token,
-    },
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Failed to sync participants')
-  }
-
-  return response.json()
+  return postJSON(`${API_BASE}/api/admin/sync-participants`, {}, token, 30_000)
 }
 
 export async function adminVerifyPayment(token: string, playerId: string, status: string, transactionId?: string, notes?: string): Promise<any> {
-  const response = await fetch(`${API_BASE}/api/admin/verify-payment`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-User-Token': token,
-    },
-    body: JSON.stringify({ player_id: playerId, status, transaction_id: transactionId, notes }),
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Failed to verify payment')
-  }
-
-  return response.json()
+  return postJSON(`${API_BASE}/api/admin/verify-payment`, { player_id: playerId, status, transaction_id: transactionId, notes }, token)
 }
 
 export async function adminGetPayments(token: string): Promise<{ payments: PaymentResponse[] }> {
-  const response = await fetch(`${API_BASE}/api/admin/payments`, {
-    headers: {
-      'X-User-Token': token,
-    },
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Failed to fetch payments')
-  }
-
-  return response.json()
+  return getJSON(`${API_BASE}/api/admin/payments`, token)
 }
 
 export async function adminDeletePayment(token: string, paymentId: string): Promise<{ success: boolean }> {
-  const response = await fetch(`${API_BASE}/api/admin/payments/${encodeURIComponent(paymentId)}`, {
-    method: 'DELETE',
-    headers: {
-      'X-User-Token': token,
-    },
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Failed to delete payment')
-  }
-
-  return response.json()
+  return deleteJSON(`${API_BASE}/api/admin/payments/${encodeURIComponent(paymentId)}`, token)
 }
 
 export async function adminGetAuditLog(token: string): Promise<{ logs: AuditLogResponse[] }> {
-  const response = await fetch(`${API_BASE}/api/admin/audit-log`, {
-    headers: {
-      'X-User-Token': token,
-    },
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Failed to fetch audit log')
-  }
-
-  return response.json()
+  return getJSON(`${API_BASE}/api/admin/audit-log`, token)
 }
 
 export async function adminGetRankingVersions(token: string): Promise<{ versions: RankingVersionResponse[] }> {
-  const response = await fetch(`${API_BASE}/api/admin/ranking-versions`, {
-    headers: {
-      'X-User-Token': token,
-    },
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Failed to fetch ranking versions')
-  }
-
-  return response.json()
+  return getJSON(`${API_BASE}/api/admin/ranking-versions`, token)
 }
 
 export async function adminGetTeamVersions(token: string): Promise<{ versions: TeamVersionResponse[] }> {
-  const response = await fetch(`${API_BASE}/api/admin/team-versions`, {
-    headers: {
-      'X-User-Token': token,
-    },
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Failed to fetch team versions')
-  }
-
-  return response.json()
+  return getJSON(`${API_BASE}/api/admin/team-versions`, token)
 }
 
 export async function adminGetTeamVersionDetail(
   token: string,
   versionId: string,
 ): Promise<any> {
-  const response = await fetch(`${API_BASE}/api/admin/team-versions/${encodeURIComponent(versionId)}`, {
-    headers: {
-      'X-User-Token': token,
-    },
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Failed to fetch team version detail')
-  }
-
-  return response.json()
+  return getJSON(`${API_BASE}/api/admin/team-versions/${encodeURIComponent(versionId)}`, token)
 }
 
 export function isAdminError(err: unknown): boolean {
@@ -428,20 +214,23 @@ export async function submitPayment(token: string, proof: File, notes?: string):
   form.append('proof', proof)
   if (notes) form.append('notes', notes)
 
-  const response = await fetch(`${API_BASE}/api/me/submit-payment`, {
-    method: 'POST',
-    headers: {
-      'X-User-Token': token,
-    },
-    body: form,
-  })
+  const headers: Record<string, string> = { 'X-User-Token': token }
 
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Failed to submit payment')
-  }
-
-  return response.json()
+  return timeout(15_000, (signal) =>
+    fetch(`${API_BASE}/api/me/submit-payment`, {
+      method: 'POST',
+      headers,
+      body: form,
+      signal,
+    }).then((response) => {
+      if (!response.ok) {
+        return response.json().then((error) => {
+          throw new Error(error.detail || 'Failed to submit payment')
+        })
+      }
+      return response.json()
+    }),
+  )
 }
 
 export async function getPaymentStatus(token: string): Promise<{
@@ -454,18 +243,7 @@ export async function getPaymentStatus(token: string): Promise<{
   payment_account_number: string
   payment_account_name: string
 }> {
-  const response = await fetch(`${API_BASE}/api/me/payment-status`, {
-    headers: {
-      'X-User-Token': token,
-    },
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Failed to fetch payment status')
-  }
-
-  return response.json()
+  return getJSON(`${API_BASE}/api/me/payment-status`, token)
 }
 
 export async function getAllRankings(token: string): Promise<{
@@ -474,18 +252,7 @@ export async function getAllRankings(token: string): Promise<{
   current_user_id: string
   current_role: string
 }> {
-  const response = await fetch(`${API_BASE}/api/rankings`, {
-    headers: {
-      'X-User-Token': token,
-    },
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Failed to fetch rankings')
-  }
-
-  return response.json()
+  return getJSON(`${API_BASE}/api/rankings`, token)
 }
 
 export async function getAllTeams(token: string): Promise<{
@@ -496,16 +263,5 @@ export async function getAllTeams(token: string): Promise<{
   paid_count: number
   total_qualified: number
 }> {
-  const response = await fetch(`${API_BASE}/api/teams`, {
-    headers: {
-      'X-User-Token': token,
-    },
-  })
-
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.detail || 'Failed to fetch teams')
-  }
-
-  return response.json()
+  return getJSON(`${API_BASE}/api/teams`, token)
 }

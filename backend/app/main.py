@@ -794,7 +794,7 @@ async def admin_confirm_ranking(ranking_version_id: str = Query(...), x_user_tok
 
 
 @app.get("/api/admin/rankings")
-async def admin_get_rankings(x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db), page: int = 1, page_size: int = 9999):
+async def admin_get_rankings(x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db), page: int = 1, page_size: int = 100):
     _require_admin(x_user_token)
 
     from app.repositories.participant_repository import ParticipantRepository
@@ -1977,7 +1977,7 @@ async def get_my_payment_status(x_user_token: Optional[str] = Header(None), db: 
 
 
 @app.get("/api/rankings")
-async def get_all_rankings(x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db), page: int = 1, page_size: int = 9999):
+async def get_all_rankings(x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db), page: int = 1, page_size: int = 100):
     _require_user(x_user_token)
 
     cache_key = f"rankings_public_{page}_{page_size}"
