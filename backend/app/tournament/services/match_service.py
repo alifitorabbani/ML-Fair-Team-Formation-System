@@ -135,3 +135,51 @@ class MatchService:
 
     async def get_result_history(self, match_id: str) -> List[MatchResultVersion]:
         return await self.result_version_repo.get_by_match(match_id)
+    async def submit_game_result(self, match_id: str, game_number: int, data: Dict[str, Any]) -> BracketMatchMap:
+        match = await self.match_repo.get_by_id(match_id)
+        if not match:
+            raise ValueError("Match not found")
+        if match.format not in (BOFormat.BO3, BOFormat.BO5, BOFormat.BO7):
+            raise ValueError("Game results only supported for BO3/BO5/BO7 matches")
+        
+        # Check if game result already exists
+        existing = await self.map_repo.get_by_match_and_number(match_id, game_number)
+        if existing:
+            # Update existing game result
+            updated = await self.map_repo.update(existing.id, {
+                "team_a_id": data.get("team_a_id", existing.team_a_id),
+                "team_b_id": data.get("team_b_id", existing.team_b_id),
+                "winner_team_id": data.get("winner_team_id"),
+                "score_a": data.get("score_a"),
+                "score_b": data.get("score_b"),
+                "kills_a": data.get("kills_a"),
+                "kills_b": data.get("kills_b"),
+                "deaths_a": data.get("deaths_a"),
+                "deaths_b": data.get("deaths_b"),
+                "scheduled_date": data.get("scheduled_date"),
+                "start_time": data.get("start_time"),
+                "end_time": data.get("end_time"),
+                "status": "COMPLETED",
+            })
+            return updated
+        else:
+            # Create new game result
+            created = await self.map_repo.create({
+                "match_id": match_id,
+                "map_number": game_number,
+                "team_a_id": data.get("team_a_id", match.team_a_id),
+                "team_b_id": data.get("team_b_id", match.team_b_id),
+                "winner_team_id": data.get("winner_team_id"),
+                "score_a": data.get("score_a"),
+                "score_b": data.get("score_b"),
+                "kills_a": data.get("kills_a"),
+                "kills_b": data.get("kills_b"),
+                "deaths_a": data.get("deaths_a"),
+                "deaths_b": data.get("deaths_b"),
+                "scheduled_date": data.get("scheduled_date"),
+                "start_time": data.get("start_time"),
+                "end_time": data.get("end_time"),
+                "status": "COMPLETED",
+            })
+            return created
+

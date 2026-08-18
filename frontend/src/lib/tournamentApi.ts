@@ -273,6 +273,22 @@ export async function adminSubmitMatchResult(token: string, tournamentId: string
   return response.json()
 }
 
+export async function adminSubmitGameResult(token: string, tournamentId: string, matchId: string, gameNumber: number, data: { map_number: number; team_a_id?: string; team_b_id?: string; score_a?: number; score_b?: number; kills_a?: number; kills_b?: number; deaths_a?: number; deaths_b?: number; winner_team_id?: string; status?: string; scheduled_date?: string; start_time?: string; end_time?: string }): Promise<any> {
+  const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/matches/${encodeURIComponent(matchId)}/game/${gameNumber}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-User-Token': token,
+    },
+    body: JSON.stringify(data),
+  })
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.detail || 'Failed to submit game result')
+  }
+  return response.json()
+}
+
 export async function adminConfirmMatchResult(token: string, tournamentId: string, matchId: string): Promise<MatchResponse> {
   const response = await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/matches/${encodeURIComponent(matchId)}/result/confirm`, {
     method: 'POST',

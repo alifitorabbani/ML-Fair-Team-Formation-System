@@ -179,6 +179,9 @@ class BracketMatchMap(Base):
     deaths_a = Column(Integer, nullable=True)
     deaths_b = Column(Integer, nullable=True)
     status = Column(String, nullable=False, default="PENDING", index=True)
+    scheduled_date = Column(String, nullable=True)
+    start_time = Column(String, nullable=True)
+    end_time = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     match = relationship("Match", back_populates="map_results")

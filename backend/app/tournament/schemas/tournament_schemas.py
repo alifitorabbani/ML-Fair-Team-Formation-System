@@ -153,6 +153,28 @@ class BracketMatchMapSubmit(BaseModel):
     status: Optional[str] = None
 
 
+class BracketMatchMapResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    match_id: str
+    map_number: int
+    team_a_id: Optional[str] = None
+    team_b_id: Optional[str] = None
+    winner_team_id: Optional[str] = None
+    score_a: Optional[int] = None
+    score_b: Optional[int] = None
+    kills_a: Optional[int] = None
+    kills_b: Optional[int] = None
+    deaths_a: Optional[int] = None
+    deaths_b: Optional[int] = None
+    status: str
+    scheduled_date: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+
 class MatchResultSubmit(BaseModel):
     score_a: int
     score_b: int

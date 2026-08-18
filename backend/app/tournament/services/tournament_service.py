@@ -18,6 +18,7 @@ from app.tournament.models.tournament_models import (
     KnockoutBracket,
     KnockoutRound,
     KnockoutSlot,
+    BracketMatchMap,
     ScheduleVersion,
     TournamentPlacement,
 )
@@ -551,3 +552,11 @@ class TournamentService:
                 "notes": notes,
             }
         )
+
+    async def submit_game_result(self, tournament_id: str, match_id: str, game_number: int, data: Dict[str, Any]) -> BracketMatchMap:
+        match = await self.match_repo.get_by_id(match_id)
+        if not match:
+            raise ValueError("Match not found")
+        if match.tournament_id != tournament_id:
+            raise ValueError("Match does not belong to this tournament")
+        return await self.match_service.submit_game_result(match_id, game_number, data)

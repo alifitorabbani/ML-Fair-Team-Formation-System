@@ -35,6 +35,8 @@ from app.tournament.schemas.tournament_schemas import (
     BracketSlotResponse,
     PlacementResponse,
     ScheduleGenerateResponse,
+    BracketMatchMapSubmit,
+    BracketMatchMapResponse,
 )
 from app.tournament.constants import TournamentStatus, MatchStage, MatchStatus, BOFormat, BracketType, ThirdPlaceMode
 from app.api.deps import get_admin_user
@@ -640,6 +642,34 @@ async def confirm_result(tournament_id: str, match_id: str, x_user_token: Option
         result_confidence=match.result_confidence,
         created_at=match.created_at,
         updated_at=match.updated_at,
+    )
+
+
+@router.post("/{tournament_id}/matches/{match_id}/game/{game_number}", response_model=BracketMatchMapResponse)
+async def submit_game_result(tournament_id: str, match_id: str, game_number: int, data: BracketMatchMapSubmit, x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)):
+    _ = get_admin_user(x_user_token)
+    service = TournamentService(db)
+    try:
+        result = await service.submit_game_result(tournament_id, match_id, game_number, data.model_dump(exclude_none=True))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return BracketMatchMapResponse(
+        id=result.id,
+        match_id=result.match_id,
+        map_number=result.map_number,
+        team_a_id=result.team_a_id,
+        team_b_id=result.team_b_id,
+        winner_team_id=result.winner_team_id,
+        score_a=result.score_a,
+        score_b=result.score_b,
+        kills_a=result.kills_a,
+        kills_b=result.kills_b,
+        deaths_a=result.deaths_a,
+        deaths_b=result.deaths_b,
+        status=result.status,
+        scheduled_date=result.scheduled_date,
+        start_time=result.start_time,
+        end_time=result.end_time,
     )
 
 

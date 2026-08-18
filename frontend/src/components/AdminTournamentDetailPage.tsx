@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { adminUpdateTournament, adminGetTournamentTeams, adminGetAvailableTeams, adminCreateGroup, adminUpdateGroup, adminGetGroups, adminClearGroups, adminAutoAssignGroups, adminGenerateSchedule, adminGetSchedule, adminGetStandings, adminRecalculateStandings, adminOverrideStandings, adminCreateMatch, adminUpdateMatch, adminDeleteMatch, adminSubmitMatchResult, adminConfirmMatchResult, adminGenerateKnockout, adminGetKnockout, adminAdvanceKnockout, adminSetPlacement, adminFinalizeChampion, adminSetBracketQualification, adminGetBracketQualifications, adminClearBracketQualifications, adminResetBracket, adminResolveKnockout, adminGetDailyStandings } from '@/lib/tournamentApi'
+import { adminUpdateTournament, adminGetTournamentTeams, adminGetAvailableTeams, adminCreateGroup, adminUpdateGroup, adminGetGroups, adminClearGroups, adminAutoAssignGroups, adminGenerateSchedule, adminGetSchedule, adminGetStandings, adminRecalculateStandings, adminOverrideStandings, adminCreateMatch, adminUpdateMatch, adminDeleteMatch, adminSubmitMatchResult, adminSubmitGameResult, adminConfirmMatchResult, adminGenerateKnockout, adminGetKnockout, adminAdvanceKnockout, adminSetPlacement, adminFinalizeChampion, adminSetBracketQualification, adminGetBracketQualifications, adminClearBracketQualifications, adminResetBracket, adminResolveKnockout, adminGetDailyStandings } from '@/lib/tournamentApi'
 import { useAuthToken } from '@/lib/hooks/useAuth'
 import { TournamentResponse } from '@/types'
 import LoadingSpinner from '@/components/shared/LoadingSpinner'
@@ -223,6 +223,39 @@ export default function AdminTournamentDetailPage({ tournament, onBack }: { tour
         [matchId]: [...current, { map_number: mapNumber, winner_team_id: winnerTeamId }],
       }
     })
+  }
+
+  const handleSubmitGameResult = async (matchId: string, gameIndex: number, matchFormat: string) => {
+    if (!token) return
+    const gamesData = gameResults[matchId] || []
+    const gameResult = gamesData[gameIndex]
+    if (!gameResult) return
+    
+    setSaving(true)
+    setMatchError(null)
+    try {
+      await adminSubmitGameResult(token, tournamentId, matchId, gameIndex + 1, {
+        map_number: gameIndex + 1,
+        team_a_id: matchId, // Will be resolved on backend
+        team_b_id: matchId, // Will be resolved on backend
+        score_a: gameResult.score_a,
+        score_b: gameResult.score_b,
+        kills_a: gameResult.kills_a,
+        kills_b: gameResult.kills_b,
+        deaths_a: gameResult.deaths_a,
+        deaths_b: gameResult.deaths_b,
+        winner_team_id: gameResult.winner_team_id || undefined,
+        status: 'COMPLETED',
+        scheduled_date: gameResult.scheduled_date || undefined,
+        start_time: gameResult.start_time || undefined,
+        end_time: gameResult.end_time || undefined,
+      })
+      setMessage(`Game ${gameIndex + 1} berhasil disimpan`)
+    } catch (err) {
+      setMatchError(err instanceof Error ? err.message : 'Gagal menyimpan game')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleSubmitMatchResult = async (matchId: string, matchFormat: string = 'BO1') => {
@@ -1018,6 +1051,13 @@ export default function AdminTournamentDetailPage({ tournament, onBack }: { tour
                                                 />
                                               </div>
                                             </div>
+                                            <button
+                                              onClick={() => handleSubmitGameResult(m.id, i, m.format)}
+                                              disabled={saving}
+                                              className="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-green-500 disabled:opacity-50"
+                                            >
+                                              Simpan Game {i + 1}
+                                            </button>
                                           </div>
                                         )
                                       })}
