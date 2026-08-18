@@ -65,8 +65,9 @@ export default function AdminDashboard({
   const [verifySuccess, setVerifySuccess] = useState<string | null>(null)
   const unpaidCount = payments.filter((p) => p.status !== 'PAID').length
   const abortControllerRef = useRef<AbortController | null>(null)
+  const loadedTabsRef = useRef<Set<Tab>>(new Set())
 
-  const loadDashboard = async () => {
+  const loadDashboardStats = async () => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
     }
@@ -75,22 +76,12 @@ export default function AdminDashboard({
 
     setLoading(true)
     try {
-      const [dashboardRes, paymentsRes, auditRes, rankingVersionsRes, teamVersionsRes] = await Promise.all([
-        adminGetDashboard(token || ''),
-        adminGetPayments(token || ''),
-        adminGetAuditLog(token || ''),
-        adminGetRankingVersions(token || ''),
-        adminGetTeamVersions(token || ''),
-      ])
+      const dashboardRes = await adminGetDashboard(token || '')
       if (controller.signal.aborted) return
       setStats(dashboardRes)
-      setPayments(paymentsRes.payments || [])
-      setAuditLogs(auditRes.logs || [])
-      setRankingVersions(rankingVersionsRes.versions || [])
-      setTeamVersions(teamVersionsRes.versions || [])
     } catch (err) {
       if (controller.signal.aborted) return
-      console.error('Failed to load dashboard:', err)
+      console.error('Failed to load dashboard stats:', err)
       if (isAdminError(err)) {
         clearSession()
         window.location.reload()
@@ -102,9 +93,47 @@ export default function AdminDashboard({
     }
   }
 
+  const loadTabData = async (tab: Tab) => {
+    if (loadedTabsRef.current.has(tab)) return
+    const controller = new AbortController()
+
+    try {
+      if (tab === 'payments') {
+        const data = await adminGetPayments(token || '')
+        if (!controller.signal.aborted) {
+          setPayments(data.payments || [])
+          loadedTabsRef.current.add('payments')
+        }
+      } else if (tab === 'audit') {
+        const data = await adminGetAuditLog(token || '')
+        if (!controller.signal.aborted) {
+          setAuditLogs(data.logs || [])
+          loadedTabsRef.current.add('audit')
+        }
+      } else if (tab === 'rankings') {
+        const data = await adminGetRankingVersions(token || '')
+        if (!controller.signal.aborted) {
+          setRankingVersions(data.versions || [])
+          loadedTabsRef.current.add('rankings')
+        }
+      } else if (tab === 'teams') {
+        const data = await adminGetTeamVersions(token || '')
+        if (!controller.signal.aborted) {
+          setTeamVersions(data.versions || [])
+          loadedTabsRef.current.add('teams')
+        }
+      }
+    } catch (err) {
+      if (!controller.signal.aborted) {
+        console.error(`Failed to load ${tab} data:`, err)
+      }
+    }
+  }
+
   useEffect(() => {
     if (token) {
-      loadDashboard()
+      loadedTabsRef.current.clear()
+      loadDashboardStats()
     }
     return () => {
       if (abortControllerRef.current) {
@@ -112,6 +141,12 @@ export default function AdminDashboard({
       }
     }
   }, [token])
+
+  useEffect(() => {
+    if (token && activeTab !== 'overview') {
+      loadTabData(activeTab)
+    }
+  }, [activeTab, token])
 
   const handleAdminError = (err: unknown) => {
     if (isAdminError(err)) {
@@ -147,7 +182,7 @@ export default function AdminDashboard({
       await adminConfirmRanking(token || '', rankingVersionId)
       alert('Ranking berhasil dikonfirmasi')
       setRankingPreview(null)
-      loadDashboard()
+      loadDashboardStats()
       onNavigateToTeams()
     } catch (err) {
       if (!handleAdminError(err)) {
@@ -161,7 +196,7 @@ export default function AdminDashboard({
     try {
       await adminGenerateTeam(token || '')
       alert('Tim berhasil digenerate')
-      loadDashboard()
+      loadDashboardStats()
     } catch (err) {
       if (!handleAdminError(err)) {
         alert(err instanceof Error ? err.message : 'Gagal membuat tim')
@@ -180,7 +215,7 @@ export default function AdminDashboard({
       setVerifyPlayerId('')
       setVerifyNotes('')
       setVerifyTransactionId('')
-      loadDashboard()
+      loadDashboardStats()
     } catch (err) {
       if (!handleAdminError(err)) {
         setVerifyError(err instanceof Error ? err.message : 'Gagal memverifikasi pembayaran')
@@ -199,7 +234,7 @@ export default function AdminDashboard({
       setVerifyPlayerId('')
       setVerifyNotes('')
       setVerifyTransactionId('')
-      loadDashboard()
+      loadDashboardStats()
     } catch (err) {
       if (!handleAdminError(err)) {
         setVerifyError(err instanceof Error ? err.message : 'Gagal memverifikasi pembayaran')
@@ -211,7 +246,7 @@ export default function AdminDashboard({
     if (!window.confirm(`Hapus pembayaran untuk ${playerId}? User tidak akan bisa mengakses tim.`)) return
     try {
       await adminDeletePayment(token || '', paymentId)
-      loadDashboard()
+      loadDashboardStats()
     } catch (err) {
       if (!handleAdminError(err)) {
         alert(err instanceof Error ? err.message : 'Gagal menghapus pembayaran')
@@ -226,7 +261,7 @@ export default function AdminDashboard({
     try {
       const result = await adminSeedPayments(token || '')
       alert(`Berhasil membuat ${result.inserted_count} data pembayaran dummy dari ${result.total_qualified} peserta lolos kualifikasi.`)
-      loadDashboard()
+      loadDashboardStats()
     } catch (err) {
       if (!handleAdminError(err)) {
         alert(err instanceof Error ? err.message : 'Gagal membuat data pembayaran dummy')
@@ -243,7 +278,7 @@ export default function AdminDashboard({
     try {
       const result = await adminSyncParticipants(token || '')
       alert(`Sinkronisasi peserta selesai.\n\nDihapus: ${result.deleted_count}\nDitambahkan: ${result.inserted_count}\nDiperbarui: ${result.updated_count}\nTotal peserta: ${result.total_participants}`)
-      loadDashboard()
+      loadDashboardStats()
     } catch (err) {
       if (!handleAdminError(err)) {
         alert(err instanceof Error ? err.message : 'Gagal sinkronisasi peserta')
@@ -404,7 +439,7 @@ export default function AdminDashboard({
         <Card>
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-bold text-white">Versi Ranking</h2>
-            <button onClick={loadDashboard} className="text-xs text-gray-400 transition hover:text-white">
+            <button onClick={loadDashboardStats} className="text-xs text-gray-400 transition hover:text-white">
               <RefreshCw className="h-4 w-4" />
             </button>
           </div>
@@ -450,7 +485,7 @@ export default function AdminDashboard({
         <Card>
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-bold text-white">Versi Tim</h2>
-            <button onClick={loadDashboard} className="text-xs text-gray-400 transition hover:text-white">
+            <button onClick={loadDashboardStats} className="text-xs text-gray-400 transition hover:text-white">
               <RefreshCw className="h-4 w-4" />
             </button>
           </div>
@@ -549,7 +584,7 @@ export default function AdminDashboard({
           <div className="mt-8">
             <div className="mb-3 flex items-center justify-between">
               <h3 className="text-sm font-semibold text-gray-300">Daftar Pembayaran</h3>
-              <button onClick={loadDashboard} className="text-xs text-gray-400 transition hover:text-white">
+              <button onClick={loadDashboardStats} className="text-xs text-gray-400 transition hover:text-white">
                 <RefreshCw className="h-4 w-4" />
               </button>
             </div>
@@ -633,7 +668,7 @@ export default function AdminDashboard({
         <Card>
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-lg font-bold text-white">Log Audit</h2>
-            <button onClick={loadDashboard} className="text-xs text-gray-400 transition hover:text-white">
+            <button onClick={loadDashboardStats} className="text-xs text-gray-400 transition hover:text-white">
               <RefreshCw className="h-4 w-4" />
             </button>
           </div>

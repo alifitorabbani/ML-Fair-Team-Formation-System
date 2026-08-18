@@ -295,6 +295,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+@app.middleware("http")
+async def timing_middleware(request, call_next):
+    import time
+    start = time.perf_counter()
+    try:
+        response = await call_next(request)
+        return response
+    finally:
+        duration_ms = (time.perf_counter() - start) * 1000
+        if duration_ms > 500:
+            print(f"SLOW REQUEST: {request.method} {request.url.path} took {duration_ms:.0f}ms")
+
 app.include_router(admin_tournament_router)
 app.include_router(user_tournament_router)
 
