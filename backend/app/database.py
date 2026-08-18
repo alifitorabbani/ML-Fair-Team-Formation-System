@@ -23,11 +23,16 @@ connect_args: dict = {}
 if SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
     connect_args = {"check_same_thread": False}
 
-# On Vercel, enable SSL for asyncpg explicitly if using PostgreSQL
+# On Vercel/serverless, enable SSL for asyncpg explicitly if using PostgreSQL
 if os.getenv("VERCEL") == "1" and SQLALCHEMY_DATABASE_URL.startswith("postgresql+asyncpg://"):
     connect_args["ssl"] = True
-    connect_args["timeout"] = 10
-    connect_args.setdefault("server_settings", {})["statement_timeout"] = "30000"
+
+# Apply PostgreSQL safety timeouts for all environments when using asyncpg.
+# These do not change business logic; they only make failures fast and visible.
+if SQLALCHEMY_DATABASE_URL.startswith("postgresql+asyncpg://"):
+    connect_args.setdefault("timeout", 10)
+    connect_args.setdefault("server_settings", {})
+    connect_args["server_settings"].setdefault("statement_timeout", "30000")
 
 engine = create_async_engine(
     SQLALCHEMY_DATABASE_URL,
