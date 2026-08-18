@@ -341,36 +341,43 @@ async def health():
 
 @app.post("/api/login")
 async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)):
-    email = request.email.strip().lower()
+    import time
+    start = time.perf_counter()
+    try:
+        email = request.email.strip().lower()
 
-    if email in settings.admin_emails_list:
-        token = create_access_token({"sub": "admin", "email": email, "role": "admin", "name": "Admin"})
+        if email in settings.admin_emails_list:
+            token = create_access_token({"sub": "admin", "email": email, "role": "admin", "name": "Admin"})
+            return {
+                "token": token,
+                "player_id": "admin",
+                "email": email,
+                "username": None,
+                "full_name": "Admin",
+                "name": "Admin",
+                "role": "admin",
+            }
+
+        repo = ParticipantRepository(db)
+        participant = await repo.get_by_email(email)
+        if not participant:
+            raise HTTPException(status_code=400, detail="Email tidak ditemukan")
+
+        token = create_access_token({"sub": participant.id, "email": participant.email, "role": "user", "name": participant.name})
+
         return {
             "token": token,
-            "player_id": "admin",
-            "email": email,
-            "username": None,
-            "full_name": "Admin",
-            "name": "Admin",
-            "role": "admin",
+            "player_id": participant.id,
+            "email": participant.email,
+            "username": participant.username,
+            "full_name": participant.name,
+            "name": participant.name,
+            "role": "user",
         }
-
-    repo = ParticipantRepository(db)
-    participant = await repo.get_by_email(email)
-    if not participant:
-        raise HTTPException(status_code=400, detail="Email tidak ditemukan")
-
-    token = create_access_token({"sub": participant.id, "email": participant.email, "role": "user", "name": participant.name})
-
-    return {
-        "token": token,
-        "player_id": participant.id,
-        "email": participant.email,
-        "username": participant.username,
-        "full_name": participant.name,
-        "name": participant.name,
-        "role": "user",
-    }
+    finally:
+        duration_ms = (time.perf_counter() - start) * 1000
+        if duration_ms > 500:
+            print(f"ENDPOINT /api/login took {duration_ms:.0f}ms")
 
 
 @app.post("/api/admin/process-participants")
@@ -662,20 +669,27 @@ async def get_config():
 
 @app.get("/api/system-state", response_model=SystemStateResponse)
 async def get_system_state(db: AsyncSession = Depends(get_db)):
-    cached = cache.get("system_state")
-    if cached is not None:
-        return JSONResponse(content=cached, headers={"Cache-Control": "public, max-age=30"})
+    import time
+    start = time.perf_counter()
+    try:
+        cached = cache.get("system_state")
+        if cached is not None:
+            return JSONResponse(content=cached, headers={"Cache-Control": "public, max-age=30"})
 
-    repo = SystemStateRepository(db)
-    state = await repo.get_or_create()
-    response = SystemStateResponse(
-        state=state.state,
-        current_ranking_version_id=state.current_ranking_version_id,
-        current_team_version_id=state.current_team_version_id,
-        updated_at=state.updated_at.isoformat() if state.updated_at else None,
-    )
-    cache.set("system_state", response.model_dump(), ttl_seconds=30)
-    return JSONResponse(content=response.model_dump(), headers={"Cache-Control": "public, max-age=30"})
+        repo = SystemStateRepository(db)
+        state = await repo.get_or_create()
+        response = SystemStateResponse(
+            state=state.state,
+            current_ranking_version_id=state.current_ranking_version_id,
+            current_team_version_id=state.current_team_version_id,
+            updated_at=state.updated_at.isoformat() if state.updated_at else None,
+        )
+        cache.set("system_state", response.model_dump(), ttl_seconds=30)
+        return JSONResponse(content=response.model_dump(), headers={"Cache-Control": "public, max-age=30"})
+    finally:
+        duration_ms = (time.perf_counter() - start) * 1000
+        if duration_ms > 500:
+            print(f"ENDPOINT /api/system-state took {duration_ms:.0f}ms")
 
 
 @app.post("/api/admin/generate-ranking")

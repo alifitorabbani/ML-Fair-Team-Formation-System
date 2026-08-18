@@ -27,6 +27,7 @@ if SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
 if os.getenv("VERCEL") == "1" and SQLALCHEMY_DATABASE_URL.startswith("postgresql+asyncpg://"):
     connect_args["ssl"] = True
     connect_args["timeout"] = 10
+    connect_args.setdefault("server_settings", {})["statement_timeout"] = "30000"
 
 engine = create_async_engine(
     SQLALCHEMY_DATABASE_URL,
