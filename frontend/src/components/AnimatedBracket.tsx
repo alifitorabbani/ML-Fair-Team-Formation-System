@@ -20,6 +20,9 @@ interface BracketMatch {
   is_grand_final?: boolean
   next_match_id?: string
   loser_next_match_id?: string
+  match_number?: number
+  participant_source_a?: string | null
+  participant_source_b?: string | null
   map_results?: Array<{
     id?: string
     map_number: number
@@ -56,6 +59,22 @@ function getRequiredWins(format: string): number {
     default:
       return 1
   }
+}
+
+const CARD_W = 220
+const CARD_H = 80
+const H_GAP = 40
+const V_GAP = 28
+const LOWER_COL_X = CARD_W + H_GAP
+
+function getY(index: number, total: number, containerHeight: number): number {
+  if (total === 1) return (containerHeight - CARD_H) / 2
+  const spacing = (containerHeight - CARD_H) / (total - 1)
+  return spacing * index
+}
+
+function getGrandFinalX(containerWidth: number): number {
+  return (containerWidth - CARD_W) / 2
 }
 
 function BracketMatchCard({ match, index, isFinal, isGrandFinal, token, tournamentId, getTeamName, onMatchUpdate, onAdvance }: { match: BracketMatch; index: number; isFinal?: boolean; isGrandFinal?: boolean; token: string | null; tournamentId: string; getTeamName?: (teamId: string | null) => string; onMatchUpdate?: () => void; onAdvance?: (matchId: string) => void }) {
@@ -96,6 +115,17 @@ function BracketMatchCard({ match, index, isFinal, isGrandFinal, token, tourname
     if (isFinal) return 'text-brand-300'
     if (match.bracket_type === 'UPPER') return 'text-green-300'
     return 'text-yellow-300'
+  }
+
+  const getLabel = () => {
+    if (isGrandFinal) return 'Grand Final'
+    if (isFinal) return match.bracket_type === 'UPPER' ? 'Upper Final' : 'Lower Final'
+    if (match.bracket_type === 'UPPER') {
+      return match.round === 1 ? 'Upper Round 1' : 'Upper Round 2'
+    }
+    if (match.round === 1) return 'Lower Round 1'
+    if (match.round === 2) return 'Lower Round 2'
+    return 'Lower Round 3'
   }
 
   const requiredWins = getRequiredWins(match.format)
@@ -197,6 +227,8 @@ function BracketMatchCard({ match, index, isFinal, isGrandFinal, token, tourname
         team_a_id: match.team_a_id,
         team_b_id: match.team_b_id,
         winner_team_id: m.winner_team_id,
+        score_a: m.score_a ?? 0,
+        score_b: m.score_b ?? 0,
         status: 'COMPLETED',
       }))
       await fetch(`${API_BASE}/api/admin/tournaments/${encodeURIComponent(tournamentId)}/matches/${encodeURIComponent(match.id)}/result`, {
@@ -257,11 +289,11 @@ function BracketMatchCard({ match, index, isFinal, isGrandFinal, token, tourname
 
   return (
     <div
-      className={`rounded-xl border p-3 transition-all duration-500 ${getBorderColor()} ${animated ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-4'}`}
+      className={`rounded-xl border p-3 transition-all duration-500 ${getBorderColor()} ${animated ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4'}`}
     >
-      <div className="mb-1 text-xs text-gray-400">
-        {isGrandFinal ? 'Final' : isFinal ? 'Final' : `Round ${match.round}`}
-        <span className="ml-2 text-gray-500">({match.format})</span>
+      <div className="mb-1 flex items-center justify-between text-xs text-gray-400">
+        <span>{getLabel()}</span>
+        <span>{match.format}</span>
       </div>
       <div className={`space-y-1 ${getTextColor()}`}>
         <div className={`flex items-center justify-between rounded-lg px-2 py-1 ${match.winner_team_id === match.team_a_id ? 'bg-white/10' : 'bg-white/5'}`}>
@@ -352,83 +384,351 @@ export default function AnimatedBracket({ upperMatches, lowerMatches, grandFinal
     }
   }, [])
 
+  // Organize matches by round
+  const ubRound1 = upperMatches.filter(m => m.round === 1)
+  const ubFinal = upperMatches.find(m => m.is_upper_final) || null
+
+  const lbRound1 = lowerMatches.filter(m => m.round === 1)
+  const lbRound2 = lowerMatches.filter(m => m.round === 2)
+  const lbRound3 = lowerMatches.filter(m => m.round === 3)
+  const lbFinal = lowerMatches.find(m => m.is_lower_final) || null
+
+  // Calculate container height based on content
+  const maxUpperCards = Math.max(ubRound1.length, ubFinal ? 1 : 0)
+  const maxLowerCards = Math.max(lbRound1.length, lbRound2.length, lbRound3.length, lbFinal ? 1 : 0)
+  const containerHeight = Math.max(
+    (maxUpperCards - 1) * (CARD_H + V_GAP) + CARD_H,
+    (maxLowerCards - 1) * (CARD_H + V_GAP) + CARD_H
+  ) + (grandFinal ? CARD_H + V_GAP * 3 : 0)
+
+  const matchById = (id?: string | null) => {
+    if (!id) return null
+    return [...upperMatches, ...lowerMatches, ...(grandFinal ? [grandFinal] : [])].find(m => m.id === id) || null
+  }
+
+  const getCenterX = (col: number, cardWidth: number = CARD_W) => {
+    if (col === 0) return 0
+    if (col === 1) return LOWER_COL_X
+    return getGrandFinalX((LOWER_COL_X + CARD_W + H_GAP))
+  }
+
+  const getCenterY = (index: number, total: number) => {
+    if (total <= 1) return 0
+    const spacing = (containerHeight - CARD_H) / (total - 1)
+    return spacing * index
+  }
+
+  const renderArrow = (fromMatch: BracketMatch | null, toMatch: BracketMatch | null, color: string, fromCol: number, toCol: number, fromIndex: number, toIndex: number, fromTotal: number, toTotal: number) => {
+    if (!fromMatch || !toMatch) return null
+
+    const x1 = getCenterX(fromCol) + CARD_W
+    const y1 = getCenterY(fromIndex, fromTotal) + CARD_H / 2
+    const x2 = getCenterX(toCol)
+    const y2 = getCenterY(toIndex, toTotal) + CARD_H / 2
+
+    const midX = (x1 + x2) / 2
+
+    return (
+      <path
+        d={`M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`}
+        fill="none"
+        stroke={color}
+        strokeWidth="2"
+        strokeDasharray="4 2"
+        className="opacity-60"
+      />
+    )
+  }
+
+  const totalWidth = LOWER_COL_X + CARD_W + H_GAP
+  const gfX = getGrandFinalX(totalWidth)
+
+  // Upper bracket layout
+  const ubY1 = getCenterY(0, ubRound1.length)
+  const ubY2 = getCenterY(1, ubRound1.length)
+  const ubFinalY = ubFinal ? getCenterY(0, 1) : 0
+  const ubFinalX = getCenterX(0)
+
+  // Lower bracket layout
+  const lbY1 = getCenterY(0, lbRound1.length)
+  const lbY2 = getCenterY(1, lbRound1.length)
+  const lbY3 = getCenterY(0, lbRound2.length)
+  const lbY4 = getCenterY(1, lbRound2.length)
+  const lbY5 = lbRound3.length > 0 ? getCenterY(0, lbRound3.length) : 0
+  const lbFinalY = lbFinal ? getCenterY(0, lbFinal ? 1 : 0) : 0
+
+  // Grand final position
+  const gfY = containerHeight - CARD_H - (grandFinal ? 0 : 999)
+
   return (
-    <div className="space-y-6">
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Upper Bracket */}
-        <div className={`space-y-3 transition-all duration-700 ${showUpper ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+    <div className="w-full overflow-x-auto">
+      <div className="min-w-[640px]">
+        {/* Legend */}
+        <div className="mb-4 flex flex-wrap items-center gap-4 text-xs text-gray-400">
           <div className="flex items-center gap-2">
             <div className="h-3 w-3 rounded-full bg-green-500"></div>
-            <h3 className="text-lg font-semibold text-green-300">Upper Bracket</h3>
+            <span>Upper Bracket</span>
           </div>
-          <div className="space-y-2">
-            {upperMatches.map((match, idx) => (
-              <BracketMatchCard
-                key={match.id}
-                match={match}
-                index={idx}
-                isFinal={match.is_upper_final}
-                token={token}
-                tournamentId={tournamentId}
-                getTeamName={getTeamName}
-                onMatchUpdate={onMatchUpdate}
-                onAdvance={onAdvance}
-              />
-            ))}
-            {upperMatches.length === 0 && (
-              <p className="text-xs text-gray-500">Belum ada match upper bracket.</p>
-            )}
-          </div>
-        </div>
-
-        {/* Lower Bracket */}
-        <div className={`space-y-3 transition-all duration-700 ${showLower ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
           <div className="flex items-center gap-2">
             <div className="h-3 w-3 rounded-full bg-yellow-500"></div>
-            <h3 className="text-lg font-semibold text-yellow-300">Lower Bracket</h3>
+            <span>Lower Bracket</span>
           </div>
-          <div className="space-y-2">
-            {lowerMatches.map((match, idx) => (
-              <BracketMatchCard
-                key={match.id}
-                match={match}
-                index={idx}
-                isFinal={match.is_lower_final}
-                token={token}
-                tournamentId={tournamentId}
-                getTeamName={getTeamName}
-                onMatchUpdate={onMatchUpdate}
-                onAdvance={onAdvance}
-              />
-            ))}
-            {lowerMatches.length === 0 && (
-              <p className="text-xs text-gray-500">Belum ada match lower bracket.</p>
+          {grandFinal && (
+            <div className="flex items-center gap-2">
+              <div className="h-3 w-3 rounded-full bg-purple-500"></div>
+              <span>Grand Final</span>
+            </div>
+          )}
+        </div>
+
+        {/* Bracket Tree */}
+        <div className="relative" style={{ height: Math.max(containerHeight, gfY + CARD_H + 20) }}>
+          {/* SVG Arrows Layer */}
+          <svg className="absolute inset-0 w-full h-full" style={{ minWidth: totalWidth + 40, minHeight: Math.max(containerHeight, gfY + CARD_H + 20) }}>
+            {/* Upper bracket arrows */}
+            {ubRound1.length === 2 && ubFinal && (
+              <>
+                {/* Winner arrows from UB1 and UB2 to Upper Final */}
+                {renderArrow(ubRound1[0], ubFinal, '#22c55e', 0, 0, 0, 0, ubRound1.length, 1)}
+                {renderArrow(ubRound1[1], ubFinal, '#22c55e', 0, 0, 1, 0, ubRound1.length, 1)}
+                {/* Loser arrows from UB1 and UB2 to Lower Bracket */}
+                {lbRound2.length === 2 && (
+                  <>
+                    {renderArrow(ubRound1[0], lbRound2[0], '#eab308', 0, 1, 0, 0, ubRound1.length, lbRound2.length)}
+                    {renderArrow(ubRound1[1], lbRound2[1], '#eab308', 0, 1, 1, 1, ubRound1.length, lbRound2.length)}
+                  </>
+                )}
+              </>
+            )}
+
+            {/* Upper Final arrows */}
+            {ubFinal && grandFinal && (
+              <>
+                {/* Winner to Grand Final */}
+                {renderArrow(ubFinal, grandFinal, '#a855f7', 0, 2, 0, 0, 1, 1)}
+                {/* Loser to Lower Final */}
+                {lbFinal && renderArrow(ubFinal, lbFinal, '#eab308', 0, 1, 0, 0, 1, 1)}
+              </>
+            )}
+
+            {/* Lower bracket round 1 arrows */}
+            {lbRound1.length === 2 && lbRound2.length === 2 && (
+              <>
+                {renderArrow(lbRound1[0], lbRound2[0], '#eab308', 1, 1, 0, 0, lbRound1.length, lbRound2.length)}
+                {renderArrow(lbRound1[1], lbRound2[1], '#eab308', 1, 1, 1, 1, lbRound1.length, lbRound2.length)}
+              </>
+            )}
+
+            {/* Lower bracket round 2 arrows */}
+            {lbRound2.length === 2 && lbRound3.length === 1 && (
+              <>
+                {renderArrow(lbRound2[0], lbRound3[0], '#eab308', 1, 1, 0, 0, lbRound2.length, lbRound3.length)}
+                {renderArrow(lbRound2[1], lbRound3[0], '#eab308', 1, 1, 1, 0, lbRound2.length, lbRound3.length)}
+              </>
+            )}
+
+            {/* Lower bracket round 3 to Lower Final */}
+            {lbRound3.length === 1 && lbFinal && (
+              renderArrow(lbRound3[0], lbFinal, '#eab308', 1, 1, 0, 0, lbRound3.length, 1)
+            )}
+
+            {/* Lower Final to Grand Final */}
+            {lbFinal && grandFinal && (
+              renderArrow(lbFinal, grandFinal, '#a855f7', 1, 2, 0, 0, 1, 1)
+            )}
+          </svg>
+
+          {/* Match Cards Layer */}
+          <div className="absolute inset-0">
+            {/* Upper Bracket */}
+            <div className={`transition-all duration-700 ${showUpper ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+              <div className="flex items-center gap-2 mb-2">
+                <div className="h-3 w-3 rounded-full bg-green-500"></div>
+                <h3 className="text-lg font-semibold text-green-300">Upper Bracket</h3>
+              </div>
+              <div className="relative" style={{ height: containerHeight }}>
+                {ubRound1.map((match, idx) => (
+                  <div
+                    key={match.id}
+                    className="absolute"
+                    style={{
+                      left: 0,
+                      top: getCenterY(idx, ubRound1.length),
+                      width: CARD_W,
+                      height: CARD_H,
+                    }}
+                  >
+                    <BracketMatchCard
+                      match={match}
+                      index={idx}
+                      token={token}
+                      tournamentId={tournamentId}
+                      getTeamName={getTeamName}
+                      onMatchUpdate={onMatchUpdate}
+                      onAdvance={onAdvance}
+                    />
+                  </div>
+                ))}
+                {ubFinal && (
+                  <div
+                    className="absolute"
+                    style={{
+                      left: 0,
+                      top: ubFinalY,
+                      width: CARD_W,
+                      height: CARD_H,
+                    }}
+                  >
+                    <BracketMatchCard
+                      match={ubFinal}
+                      index={0}
+                      isFinal
+                      token={token}
+                      tournamentId={tournamentId}
+                      getTeamName={getTeamName}
+                      onMatchUpdate={onMatchUpdate}
+                      onAdvance={onAdvance}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Lower Bracket */}
+            <div className={`transition-all duration-700 ${showLower ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4'}`}>
+              <div className="flex items-center gap-2 mb-2">
+                <div className="h-3 w-3 rounded-full bg-yellow-500"></div>
+                <h3 className="text-lg font-semibold text-yellow-300">Lower Bracket</h3>
+              </div>
+              <div className="relative" style={{ height: containerHeight, marginLeft: LOWER_COL_X }}>
+                {lbRound1.map((match, idx) => (
+                  <div
+                    key={match.id}
+                    className="absolute"
+                    style={{
+                      left: 0,
+                      top: getCenterY(idx, lbRound1.length),
+                      width: CARD_W,
+                      height: CARD_H,
+                    }}
+                  >
+                    <BracketMatchCard
+                      match={match}
+                      index={idx}
+                      token={token}
+                      tournamentId={tournamentId}
+                      getTeamName={getTeamName}
+                      onMatchUpdate={onMatchUpdate}
+                      onAdvance={onAdvance}
+                    />
+                  </div>
+                ))}
+                {lbRound2.map((match, idx) => (
+                  <div
+                    key={match.id}
+                    className="absolute"
+                    style={{
+                      left: 0,
+                      top: getCenterY(idx, lbRound2.length),
+                      width: CARD_W,
+                      height: CARD_H,
+                    }}
+                  >
+                    <BracketMatchCard
+                      match={match}
+                      index={idx}
+                      token={token}
+                      tournamentId={tournamentId}
+                      getTeamName={getTeamName}
+                      onMatchUpdate={onMatchUpdate}
+                      onAdvance={onAdvance}
+                    />
+                  </div>
+                ))}
+                {lbRound3.map((match, idx) => (
+                  <div
+                    key={match.id}
+                    className="absolute"
+                    style={{
+                      left: 0,
+                      top: getCenterY(idx, lbRound3.length),
+                      width: CARD_W,
+                      height: CARD_H,
+                    }}
+                  >
+                    <BracketMatchCard
+                      match={match}
+                      index={idx}
+                      token={token}
+                      tournamentId={tournamentId}
+                      getTeamName={getTeamName}
+                      onMatchUpdate={onMatchUpdate}
+                      onAdvance={onAdvance}
+                    />
+                  </div>
+                ))}
+                {lbFinal && (
+                  <div
+                    className="absolute"
+                    style={{
+                      left: 0,
+                      top: getCenterY(0, 1),
+                      width: CARD_W,
+                      height: CARD_H,
+                    }}
+                  >
+                    <BracketMatchCard
+                      match={lbFinal}
+                      index={0}
+                      isFinal
+                      token={token}
+                      tournamentId={tournamentId}
+                      getTeamName={getTeamName}
+                      onMatchUpdate={onMatchUpdate}
+                      onAdvance={onAdvance}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Grand Final */}
+            {grandFinal && (
+              <div
+                className={`absolute transition-all duration-700 ${showGrandFinal ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}
+                style={{
+                  left: gfX,
+                  top: gfY,
+                  width: CARD_W,
+                  height: CARD_H,
+                }}
+              >
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <div className="h-4 w-4 rounded-full bg-purple-500"></div>
+                  <h3 className="text-xl font-bold text-purple-300">Grand Final (BO7)</h3>
+                </div>
+                <BracketMatchCard
+                  match={grandFinal}
+                  index={0}
+                  isGrandFinal
+                  token={token}
+                  tournamentId={tournamentId}
+                  getTeamName={getTeamName}
+                  onMatchUpdate={onMatchUpdate}
+                  onAdvance={onAdvance}
+                />
+              </div>
             )}
           </div>
         </div>
-      </div>
 
-      {/* Grand Final */}
-      {grandFinal && (
-        <div className={`flex justify-center transition-all duration-700 ${showGrandFinal ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}>
-          <div className="w-full max-w-md">
-            <div className="flex items-center justify-center gap-2 mb-3">
-              <div className="h-4 w-4 rounded-full bg-purple-500"></div>
-              <h3 className="text-xl font-bold text-purple-300">Grand Final (BO7)</h3>
-            </div>
-            <BracketMatchCard
-              match={grandFinal}
-              index={0}
-              isGrandFinal
-              token={token}
-              tournamentId={tournamentId}
-              getTeamName={getTeamName}
-              onMatchUpdate={onMatchUpdate}
-              onAdvance={onAdvance}
-            />
+        {/* Empty state */}
+        {upperMatches.length === 0 && lowerMatches.length === 0 && !grandFinal && (
+          <div className="py-12 text-center">
+            <p className="text-sm text-gray-400">Belum ada bracket. Klik "Generate Bracket" untuk membuat bracket.</p>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   )
 }
