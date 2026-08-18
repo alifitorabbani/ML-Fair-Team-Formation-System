@@ -6,7 +6,8 @@
     },
     "backend": {
       "root": "backend",
-      "entrypoint": "api/index.py"
+      "entrypoint": "api/index.py",
+      "runtime": "python3.12"
     }
   },
   "rewrites": [
