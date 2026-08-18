@@ -6,7 +6,6 @@ from contextlib import asynccontextmanager
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text, select, func
 import asyncio
-import pandas as pd
 import json
 import ast
 import traceback
@@ -184,6 +183,8 @@ def _get_master_csv_path() -> str:
 
 
 def _load_default_database():
+    import pandas as pd
+
     db_path = _get_master_csv_path()
     try:
         df = pd.read_csv(db_path, dtype=str, keep_default_na=False, na_values=["", "NA", "N/A", "null", "None", "nan", "NaN"])
@@ -375,6 +376,8 @@ async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)):
 @app.post("/api/admin/process-participants")
 async def admin_process_participants(x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)):
     _require_admin(x_user_token)
+
+    import pandas as pd
 
     db_path = _get_master_csv_path()
     try:

@@ -10,24 +10,35 @@ import {
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? ''
 
+function isAbortError(err: unknown): boolean {
+  return err instanceof Error && err.name === 'AbortError'
+}
+
 function timeout<T>(ms: number, fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), ms)
+  const timer = setTimeout(() => controller.abort('timeout'), ms)
   return fn(controller.signal).finally(() => clearTimeout(timer))
 }
 
 async function fetchJSON(url: string, init?: RequestInit & { timeoutMs?: number }): Promise<any> {
   const { timeoutMs = 15_000, ...rest } = init || {}
-  const response = await timeout(timeoutMs, (signal) =>
-    fetch(url, { ...rest, signal }),
-  )
+  try {
+    const response = await timeout(timeoutMs, (signal) =>
+      fetch(url, { ...rest, signal }),
+    )
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}))
-    throw new Error((error as any)?.detail || `Request failed: ${response.status}`)
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}))
+      throw new Error((error as any)?.detail || `Request failed: ${response.status}`)
+    }
+
+    return await response.json()
+  } catch (err) {
+    if (isAbortError(err)) {
+      throw new Error(`Request timeout after ${timeoutMs}ms`)
+    }
+    throw err
   }
-
-  return response.json()
 }
 
 async function postJSON<T>(url: string, body: unknown, token?: string, timeoutMs = 15_000): Promise<T> {
@@ -52,6 +63,23 @@ async function getJSON<T>(url: string, token?: string, timeoutMs = 15_000): Prom
     headers,
     timeoutMs,
   })
+}
+
+async function getJSONWithRetry<T>(url: string, token?: string, timeoutMs = 15_000, retries = 1): Promise<T> {
+  let lastError: Error | null = null
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await getJSON<T>(url, token, timeoutMs)
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err))
+      if (attempt < retries && isAbortError(lastError)) {
+        await new Promise(resolve => setTimeout(resolve, 500))
+        continue
+      }
+      throw lastError
+    }
+  }
+  throw lastError
 }
 
 async function deleteJSON(url: string, token?: string, timeoutMs = 15_000): Promise<any> {
@@ -95,20 +123,20 @@ function setCachedSystemState(value: SystemStateResponse) {
 }
 
 export async function login(email: string): Promise<LoginResponse> {
-  return postJSON<LoginResponse>(`${API_BASE}/api/login`, { email })
+  return postJSON<LoginResponse>(`${API_BASE}/api/login`, { email }, undefined, 30_000)
 }
 
 export async function getSystemState(): Promise<SystemStateResponse> {
   const cached = getCachedSystemState()
   if (cached) return cached
 
-  const data = await getJSON<SystemStateResponse>(`${API_BASE}/api/system-state`, undefined, 10_000)
+  const data = await getJSONWithRetry<SystemStateResponse>(`${API_BASE}/api/system-state`, undefined, 20_000, 1)
   setCachedSystemState(data)
   return data
 }
 
 export async function getConfig(): Promise<any> {
-  return getJSON(`${API_BASE}/api/config`)
+  return getJSONWithRetry(`${API_BASE}/api/config`, undefined, 20_000, 1)
 }
 
 export async function getMyRanking(token: string): Promise<{ rank: number; total: number; player: any }> {
@@ -148,7 +176,7 @@ export async function adminGenerateTeam(token: string, randomSeed?: number): Pro
 }
 
 export async function adminGetDashboard(token: string): Promise<AdminDashboardStats> {
-  return getJSON(`${API_BASE}/api/admin/dashboard`, token)
+  return getJSONWithRetry(`${API_BASE}/api/admin/dashboard`, token, 20_000, 1)
 }
 
 export async function adminSeedPayments(token: string): Promise<{ inserted_count: number; total_qualified: number }> {
