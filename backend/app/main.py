@@ -226,6 +226,18 @@ async def lifespan(app: FastAPI):
             await conn.execute(
                 text("ALTER TABLE matches ADD COLUMN IF NOT EXISTS participant_source_b VARCHAR NULL")
             )
+            await conn.execute(
+                text("ALTER TABLE tournament_teams ADD COLUMN IF NOT EXISTS is_eliminated BOOLEAN DEFAULT 0 NOT NULL")
+            )
+            await conn.execute(
+                text("ALTER TABLE bracket_match_maps ADD COLUMN IF NOT EXISTS scheduled_date VARCHAR NULL")
+            )
+            await conn.execute(
+                text("ALTER TABLE bracket_match_maps ADD COLUMN IF NOT EXISTS start_time VARCHAR NULL")
+            )
+            await conn.execute(
+                text("ALTER TABLE bracket_match_maps ADD COLUMN IF NOT EXISTS end_time VARCHAR NULL")
+            )
     except Exception as e:
         print(f"Startup warning: database initialization failed: {e}")
     yield

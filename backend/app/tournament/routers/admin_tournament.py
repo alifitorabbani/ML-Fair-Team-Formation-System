@@ -2,6 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Any, Dict, List, Optional
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 from app.database import get_db
 from app.tournament.services.tournament_service import TournamentService
@@ -130,20 +133,27 @@ async def select_teams(tournament_id: str, data: TournamentTeamSelect, x_user_to
 
 @router.get("/{tournament_id}/teams")
 async def list_tournament_teams(tournament_id: str, x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)):
-    _ = get_admin_user(x_user_token)
-    service = TournamentService(db)
-    teams = await service.team_repo.get_by_tournament(tournament_id)
-    return [
-        {
-            "id": t.id,
-            "tournament_id": t.tournament_id,
-            "team_version_id": t.team_version_id,
-            "team_id": t.team_id,
-            "team_name_snapshot": t.team_name_snapshot,
-            "seed": t.seed,
-        }
-        for t in teams
-    ]
+    try:
+        _ = get_admin_user(x_user_token)
+        service = TournamentService(db)
+        teams = await service.team_repo.get_by_tournament(tournament_id)
+        logger.info(f"Fetched {len(teams)} teams for tournament {tournament_id}")
+        return [
+            {
+                "id": t.id,
+                "tournament_id": t.tournament_id,
+                "team_version_id": t.team_version_id,
+                "team_id": t.team_id,
+                "team_name_snapshot": t.team_name_snapshot,
+                "seed": t.seed,
+            }
+            for t in teams
+        ]
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching teams for tournament {tournament_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to fetch teams: {str(e)}")
 
 
 @router.get("/{tournament_id}/available-teams")
@@ -316,30 +326,37 @@ async def auto_assign_groups(tournament_id: str, x_user_token: Optional[str] = H
 
 @router.get("/{tournament_id}/groups")
 async def list_groups(tournament_id: str, x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)):
-    _ = get_admin_user(x_user_token)
-    group_service = GroupService(db)
-    groups = await group_service.list_groups(tournament_id)
-    result = []
-    for group in groups:
-        members = await group_service.group_member_repo.get_by_group(group.id)
-        result.append({
-            "id": group.id,
-            "tournament_id": group.tournament_id,
-            "name": group.name,
-            "sort_order": group.sort_order,
-            "members": [
-                {
-                    "id": m.id,
-                    "group_id": m.group_id,
-                    "tournament_team_id": m.tournament_team_id,
-                    "seed": m.seed,
-                    "team_id": m.tournament_team.team_id if m.tournament_team else None,
-                    "team_name_snapshot": m.tournament_team.team_name_snapshot if m.tournament_team else None,
-                }
-                for m in members
-            ],
-        })
-    return result
+    try:
+        _ = get_admin_user(x_user_token)
+        group_service = GroupService(db)
+        groups = await group_service.list_groups(tournament_id)
+        logger.info(f"Fetched {len(groups)} groups for tournament {tournament_id}")
+        result = []
+        for group in groups:
+            members = await group_service.group_member_repo.get_by_group(group.id)
+            result.append({
+                "id": group.id,
+                "tournament_id": group.tournament_id,
+                "name": group.name,
+                "sort_order": group.sort_order,
+                "members": [
+                    {
+                        "id": m.id,
+                        "group_id": m.group_id,
+                        "tournament_team_id": m.tournament_team_id,
+                        "seed": m.seed,
+                        "team_id": m.tournament_team.team_id if m.tournament_team else None,
+                        "team_name_snapshot": m.tournament_team.team_name_snapshot if m.tournament_team else None,
+                    }
+                    for m in members
+                ],
+            })
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching groups for tournament {tournament_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to fetch groups: {str(e)}")
 
 
 @router.post("/{tournament_id}/groups", response_model=GroupResponse)
@@ -675,20 +692,27 @@ async def submit_game_result(tournament_id: str, match_id: str, game_number: int
 
 @router.get("/{tournament_id}/standings")
 async def get_group_standings(tournament_id: str, x_user_token: Optional[str] = Header(None), db: AsyncSession = Depends(get_db)):
-    _ = get_admin_user(x_user_token)
-    group_service = GroupService(db)
-    groups = await group_service.list_groups(tournament_id)
-    results = []
-    for group in groups:
-        standings = await group_service.get_group_standings(group.id)
-        results.append(
-            {
-                "group_id": group.id,
-                "group_name": group.name,
-                "standings": standings,
-            }
-        )
-    return results
+    try:
+        _ = get_admin_user(x_user_token)
+        group_service = GroupService(db)
+        groups = await group_service.list_groups(tournament_id)
+        logger.info(f"Fetched {len(groups)} groups for standings, tournament {tournament_id}")
+        results = []
+        for group in groups:
+            standings = await group_service.get_group_standings(group.id)
+            results.append(
+                {
+                    "group_id": group.id,
+                    "group_name": group.name,
+                    "standings": standings,
+                }
+            )
+        return results
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching standings for tournament {tournament_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to fetch standings: {str(e)}")
 
 
 @router.patch("/{tournament_id}/standings/override")
