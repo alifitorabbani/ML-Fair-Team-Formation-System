@@ -190,51 +190,29 @@ async def lifespan(app: FastAPI):
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
-            # Run Alembic migrations if available
-            try:
-                from alembic.config import Config
-                from alembic.runtime.environment import EnvironmentContext
-                from alembic.script import ScriptDirectory
-                import os
-                
-                alembic_ini_path = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "alembic.ini"))
-                alembic_cfg = Config(alembic_ini_path)
-                alembic_cfg.set_main_option("sqlalchemy.url", str(engine.url))
-                
-                script = ScriptDirectory.from_config(alembic_cfg)
-                env = EnvironmentContext(alembic_cfg, script)
-                
-                def run_migrations(connection):
-                    env.configure(connection=connection, target_metadata=Base.metadata)
-                    with env.begin_transaction():
-                        env.run_migrations()
-                
-                await conn.run_sync(run_migrations)
-                print("Alembic migrations applied successfully.")
-            except Exception as alembic_err:
-                print(f"Alembic migration skipped or failed: {alembic_err}")
-                # Fallback to raw ALTER TABLE statements
-                migration_errors = []
-                migrations = [
-                    ("ALTER TABLE matches ADD COLUMN IF NOT EXISTS next_match_id VARCHAR NULL", "matches.next_match_id"),
-                    ("ALTER TABLE matches ADD COLUMN IF NOT EXISTS loser_next_match_id VARCHAR NULL", "matches.loser_next_match_id"),
-                    ("ALTER TABLE matches ADD COLUMN IF NOT EXISTS participant_source_a VARCHAR NULL", "matches.participant_source_a"),
-                    ("ALTER TABLE matches ADD COLUMN IF NOT EXISTS participant_source_b VARCHAR NULL", "matches.participant_source_b"),
-                    ("ALTER TABLE tournament_teams ADD COLUMN IF NOT EXISTS is_eliminated BOOLEAN DEFAULT FALSE NOT NULL", "tournament_teams.is_eliminated"),
-                    ("ALTER TABLE bracket_match_maps ADD COLUMN IF NOT EXISTS scheduled_date VARCHAR NULL", "bracket_match_maps.scheduled_date"),
-                    ("ALTER TABLE bracket_match_maps ADD COLUMN IF NOT EXISTS start_time VARCHAR NULL", "bracket_match_maps.start_time"),
-                    ("ALTER TABLE bracket_match_maps ADD COLUMN IF NOT EXISTS end_time VARCHAR NULL", "bracket_match_maps.end_time"),
-                ]
-                for sql, column in migrations:
-                    try:
-                        await conn.execute(text(sql))
-                        print(f"Fallback migration OK: {column}")
-                    except Exception as e:
-                        msg = f"Fallback migration failed for {column}: {e}"
-                        migration_errors.append(msg)
-                        print(msg)
-                if migration_errors:
-                    print("Some migrations failed. The app will continue, but some features may not work correctly.")
+            # Fast idempotent schema adjustments for serverless environments.
+            # Alembic is available for manual runs, but we do NOT block app startup
+            # on Alembic because Vercel cold starts would make every first request slow.
+            migration_errors = []
+            migrations = [
+                ("ALTER TABLE matches ADD COLUMN IF NOT EXISTS next_match_id VARCHAR NULL", "matches.next_match_id"),
+                ("ALTER TABLE matches ADD COLUMN IF NOT EXISTS loser_next_match_id VARCHAR NULL", "matches.loser_next_match_id"),
+                ("ALTER TABLE matches ADD COLUMN IF NOT EXISTS participant_source_a VARCHAR NULL", "matches.participant_source_a"),
+                ("ALTER TABLE matches ADD COLUMN IF NOT EXISTS participant_source_b VARCHAR NULL", "matches.participant_source_b"),
+                ("ALTER TABLE tournament_teams ADD COLUMN IF NOT EXISTS is_eliminated BOOLEAN DEFAULT FALSE NOT NULL", "tournament_teams.is_eliminated"),
+                ("ALTER TABLE bracket_match_maps ADD COLUMN IF NOT EXISTS scheduled_date VARCHAR NULL", "bracket_match_maps.scheduled_date"),
+                ("ALTER TABLE bracket_match_maps ADD COLUMN IF NOT EXISTS start_time VARCHAR NULL", "bracket_match_maps.start_time"),
+                ("ALTER TABLE bracket_match_maps ADD COLUMN IF NOT EXISTS end_time VARCHAR NULL", "bracket_match_maps.end_time"),
+            ]
+            for sql, column in migrations:
+                try:
+                    await conn.execute(text(sql))
+                except Exception as e:
+                    msg = f"Migration failed for {column}: {e}"
+                    migration_errors.append(msg)
+                    print(msg)
+            if migration_errors:
+                print("Some migrations failed. The app will continue, but some features may not work correctly.")
             try:
                 async with engine.begin() as conn:
                     await verify_critical_columns(conn)
