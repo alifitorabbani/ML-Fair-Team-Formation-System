@@ -72,6 +72,7 @@ class TournamentTeam(Base):
     team_id = Column(String, nullable=False, index=True)
     team_name_snapshot = Column(String, nullable=True)
     seed = Column(Integer, nullable=True)
+    is_eliminated = Column(Boolean, default=False, nullable=False, index=True)
 
     tournament = relationship("Tournament", back_populates="teams")
     group_members = relationship("TournamentGroupMember", back_populates="tournament_team", cascade="all, delete-orphan")

@@ -418,7 +418,7 @@ export default function AnimatedBracket({ upperMatches, lowerMatches, grandFinal
     return spacing * index
   }
 
-  const renderArrow = (fromMatch: BracketMatch | null, toMatch: BracketMatch | null, color: string, fromCol: number, toCol: number, fromIndex: number, toIndex: number, fromTotal: number, toTotal: number) => {
+  const renderArrow = (fromMatch: BracketMatch | null, toMatch: BracketMatch | null, color: string, fromCol: number, toCol: number, fromIndex: number, toIndex: number, fromTotal: number, toTotal: number, label?: string) => {
     if (!fromMatch || !toMatch) return null
 
     const x1 = getCenterX(fromCol) + CARD_W
@@ -427,16 +427,25 @@ export default function AnimatedBracket({ upperMatches, lowerMatches, grandFinal
     const y2 = getCenterY(toIndex, toTotal) + CARD_H / 2
 
     const midX = (x1 + x2) / 2
+    const labelX = midX
+    const labelY = (y1 + y2) / 2
 
     return (
-      <path
-        d={`M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`}
-        fill="none"
-        stroke={color}
-        strokeWidth="2"
-        strokeDasharray="4 2"
-        className="opacity-60"
-      />
+      <g>
+        <path
+          d={`M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`}
+          fill="none"
+          stroke={color}
+          strokeWidth="3"
+          strokeDasharray="6 3"
+          markerEnd="url(#arrowhead)"
+        />
+        {label && (
+          <text x={labelX} y={labelY} textAnchor="middle" className="text-[10px] font-bold" fill={color} style={{ textShadow: '0 0 3px black' }}>
+            {label}
+          </text>
+        )}
+      </g>
     )
   }
 
@@ -485,17 +494,22 @@ export default function AnimatedBracket({ upperMatches, lowerMatches, grandFinal
         <div className="relative" style={{ width: totalWidth + 40, height: Math.max(containerHeight, gfY + CARD_H + 20) }}>
           {/* SVG Arrows Layer */}
           <svg className="absolute inset-0 w-full h-full" style={{ zIndex: 10, pointerEvents: 'none', minWidth: totalWidth + 40, minHeight: Math.max(containerHeight, gfY + CARD_H + 20) }}>
+            <defs>
+              <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+                <polygon points="0 0, 10 3.5, 0 7" fill="currentColor" />
+              </marker>
+            </defs>
             {/* Upper bracket arrows */}
             {ubRound1.length === 2 && ubFinal && (
               <>
                 {/* Winner arrows from UB1 and UB2 to Upper Final */}
-                {renderArrow(ubRound1[0], ubFinal, '#22c55e', 0, 0, 0, 0, ubRound1.length, 1)}
-                {renderArrow(ubRound1[1], ubFinal, '#22c55e', 0, 0, 1, 0, ubRound1.length, 1)}
+                {renderArrow(ubRound1[0], ubFinal, '#22c55e', 0, 0, 0, 0, ubRound1.length, 1, 'WINNER')}
+                {renderArrow(ubRound1[1], ubFinal, '#22c55e', 0, 0, 1, 0, ubRound1.length, 1, 'WINNER')}
                 {/* Loser arrows from UB1 and UB2 to Lower Bracket */}
                 {lbRound2.length === 2 && (
                   <>
-                    {renderArrow(ubRound1[0], lbRound2[0], '#eab308', 0, 1, 0, 0, ubRound1.length, lbRound2.length)}
-                    {renderArrow(ubRound1[1], lbRound2[1], '#eab308', 0, 1, 1, 1, ubRound1.length, lbRound2.length)}
+                    {renderArrow(ubRound1[0], lbRound2[0], '#eab308', 0, 1, 0, 0, ubRound1.length, lbRound2.length, 'LOSER')}
+                    {renderArrow(ubRound1[1], lbRound2[1], '#eab308', 0, 1, 1, 1, ubRound1.length, lbRound2.length, 'LOSER')}
                   </>
                 )}
               </>
@@ -505,7 +519,7 @@ export default function AnimatedBracket({ upperMatches, lowerMatches, grandFinal
             {ubFinal && grandFinal && (
               <>
                 {/* Winner to Grand Final */}
-                {renderArrow(ubFinal, grandFinal, '#a855f7', 0, 2, 0, 0, 1, 1)}
+                {renderArrow(ubFinal, grandFinal, '#a855f7', 0, 2, 0, 0, 1, 1, 'WINNER')}
                 {/* Loser to Lower Final */}
                 {lbFinal && renderArrow(ubFinal, lbFinal, '#eab308', 0, 1, 0, 0, 1, 1)}
               </>
@@ -514,27 +528,27 @@ export default function AnimatedBracket({ upperMatches, lowerMatches, grandFinal
             {/* Lower bracket round 1 arrows */}
             {lbRound1.length === 2 && lbRound2.length === 2 && (
               <>
-                {renderArrow(lbRound1[0], lbRound2[0], '#eab308', 1, 1, 0, 0, lbRound1.length, lbRound2.length)}
-                {renderArrow(lbRound1[1], lbRound2[1], '#eab308', 1, 1, 1, 1, lbRound1.length, lbRound2.length)}
+                {renderArrow(lbRound1[0], lbRound2[0], '#eab308', 1, 1, 0, 0, lbRound1.length, lbRound2.length, 'WINNER')}
+                {renderArrow(lbRound1[1], lbRound2[1], '#eab308', 1, 1, 1, 1, lbRound1.length, lbRound2.length, 'WINNER')}
               </>
             )}
 
             {/* Lower bracket round 2 arrows */}
             {lbRound2.length === 2 && lbRound3.length === 1 && (
               <>
-                {renderArrow(lbRound2[0], lbRound3[0], '#eab308', 1, 1, 0, 0, lbRound2.length, lbRound3.length)}
-                {renderArrow(lbRound2[1], lbRound3[0], '#eab308', 1, 1, 1, 0, lbRound2.length, lbRound3.length)}
+                {renderArrow(lbRound2[0], lbRound3[0], '#eab308', 1, 1, 0, 0, lbRound2.length, lbRound3.length, 'WINNER')}
+                {renderArrow(lbRound2[1], lbRound3[0], '#eab308', 1, 1, 1, 0, lbRound2.length, lbRound3.length, 'WINNER')}
               </>
             )}
 
             {/* Lower bracket round 3 to Lower Final */}
             {lbRound3.length === 1 && lbFinal && (
-              renderArrow(lbRound3[0], lbFinal, '#eab308', 1, 1, 0, 0, lbRound3.length, 1)
+              renderArrow(lbRound3[0], lbFinal, '#eab308', 1, 1, 0, 0, lbRound3.length, 1, 'WINNER')
             )}
 
             {/* Lower Final to Grand Final */}
             {lbFinal && grandFinal && (
-              renderArrow(lbFinal, grandFinal, '#a855f7', 1, 2, 0, 0, 1, 1)
+              renderArrow(lbFinal, grandFinal, '#a855f7', 1, 2, 0, 0, 1, 1, 'WINNER')
             )}
           </svg>
 

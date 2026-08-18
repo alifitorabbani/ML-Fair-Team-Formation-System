@@ -376,6 +376,12 @@ class TournamentService:
             await self.bracket_service.recalculate_bracket_standings(tournament_id)
             if match.bracket_id:
                 await self._recalculate_group_standings(tournament_id, match.group_id) if match.group_id else None
+            # Automatically advance winner and loser to their next matches
+            try:
+                await self.bracket_service.advance_winner(tournament_id, match_id)
+            except Exception:
+                # If advancement fails, don't rollback the match result
+                pass
         return match
 
     async def confirm_match_result(self, tournament_id: str, match_id: str) -> Optional[Match]:

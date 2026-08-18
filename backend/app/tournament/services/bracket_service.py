@@ -23,6 +23,7 @@ from app.tournament.repositories import (
     TournamentPlacementRepository,
     MatchResultVersionRepository,
     BracketStandingRepository,
+    TournamentTeamRepository,
 )
 from app.tournament.constants import (
     TournamentStatus,
@@ -176,6 +177,7 @@ class BracketService:
         self.placement_repo = TournamentPlacementRepository(db)
         self.result_version_repo = MatchResultVersionRepository(db)
         self.bracket_standing_repo = BracketStandingRepository(db)
+        self.team_repo = TournamentTeamRepository(db)
 
     async def generate_bracket(self, tournament_id: str, qualified_teams: Optional[List[str]] = None, seeding: Optional[List[str]] = None, populate_matches: bool = True) -> Dict[str, Any]:
         """Generate exact 8-team double elimination bracket template."""
@@ -600,6 +602,7 @@ class BracketService:
             elif m.match_number == 9:
                 match_data["bracket_type"] = "LOWER"
                 match_data["is_lower_final"] = True
+                lower_matches.append(match_data)
                 lower_final = match_data
             elif m.match_number == 10:
                 match_data["bracket_type"] = "GRAND_FINAL"
@@ -629,9 +632,14 @@ class BracketService:
 
     async def _mark_team_eliminated(self, tournament_id: str, team_id: str):
         """Mark a team as eliminated (no further matches)."""
-        # In this system, eliminated teams just don't get routed to any next match
-        # We could add an ELIMINATED status to tournament_teams if needed
-        pass
+        if not team_id:
+            return
+        tournament_teams = await self.team_repo.get_by_tournament(tournament_id)
+        for tt in tournament_teams:
+            if tt.team_id == team_id:
+                tt.is_eliminated = True
+                await self.db.flush()
+                break
 
     async def _set_placement(self, tournament_id: str, team_id: str, placement: int, source: str):
         """Set team placement."""
