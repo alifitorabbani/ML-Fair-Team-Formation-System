@@ -197,7 +197,8 @@ async def lifespan(app: FastAPI):
                 from alembic.script import ScriptDirectory
                 import os
                 
-                alembic_cfg = Config(os.path.join(os.path.dirname(os.path.abspath(__file__)), "alembic.ini"))
+                alembic_ini_path = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "alembic.ini"))
+                alembic_cfg = Config(alembic_ini_path)
                 alembic_cfg.set_main_option("sqlalchemy.url", str(engine.url))
                 
                 script = ScriptDirectory.from_config(alembic_cfg)
