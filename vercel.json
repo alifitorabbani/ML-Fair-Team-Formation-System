@@ -6,7 +6,10 @@
     },
     "backend": {
       "root": "backend",
-      "entrypoint": "api/index.py"
+      "entrypoint": "api/index.py",
+      "framework": "python",
+      "installCommand": "pip install -r requirements.txt",
+      "buildCommand": "pip install -r requirements.txt"
     }
   },
   "rewrites": [
