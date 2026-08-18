@@ -141,20 +141,35 @@ function setCachedSystemState(value: SystemStateResponse) {
 }
 
 export async function login(email: string): Promise<LoginResponse> {
+  console.info('[api] login start', email)
   return postJSON<LoginResponse>(`${API_BASE}/api/login`, { email }, undefined, 60_000)
+    .catch((err) => {
+      console.error('[api] login failed', err)
+      throw err
+    })
 }
 
 export async function getSystemState(): Promise<SystemStateResponse> {
   const cached = getCachedSystemState()
   if (cached) return cached
 
+  console.info('[api] getSystemState start')
   const data = await getJSONWithRetry<SystemStateResponse>(`${API_BASE}/api/system-state`, undefined, 60_000, 1)
+    .catch((err) => {
+      console.error('[api] getSystemState failed', err)
+      throw err
+    })
   setCachedSystemState(data)
   return data
 }
 
 export async function getConfig(): Promise<any> {
+  console.info('[api] getConfig start')
   return getJSONWithRetry(`${API_BASE}/api/config`, undefined, 60_000, 1)
+    .catch((err) => {
+      console.error('[api] getConfig failed', err)
+      throw err
+    })
 }
 
 export async function getMyRanking(token: string): Promise<{ rank: number; total: number; player: any }> {

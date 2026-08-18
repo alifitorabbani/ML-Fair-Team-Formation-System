@@ -198,9 +198,12 @@ def _load_default_database():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    import time
+    start = time.perf_counter()
     try:
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)
+            print("STARTUP: create_all finished")
             # Fast idempotent schema adjustments for serverless environments.
             # Alembic is available for manual runs, but we do NOT block app startup
             # on Alembic because Vercel cold starts would make every first request slow.
@@ -231,6 +234,8 @@ async def lifespan(app: FastAPI):
                 print(f"Startup warning: critical column verification failed: {e}")
     except Exception as e:
         print(f"Startup error: database initialization failed: {e}")
+    duration_ms = (time.perf_counter() - start) * 1000
+    print(f"STARTUP: lifespan finished in {duration_ms:.0f}ms")
     yield
 
 
@@ -345,9 +350,10 @@ async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)):
     start = time.perf_counter()
     try:
         email = request.email.strip().lower()
-
+        print(f"LOGIN start email={email}")
         if email in settings.admin_emails_list:
             token = create_access_token({"sub": "admin", "email": email, "role": "admin", "name": "Admin"})
+            print(f"LOGIN admin fast email={email}")
             return {
                 "token": token,
                 "player_id": "admin",
@@ -361,10 +367,11 @@ async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)):
         repo = ParticipantRepository(db)
         participant = await repo.get_by_email(email)
         if not participant:
+            print(f"LOGIN not_found email={email}")
             raise HTTPException(status_code=400, detail="Email tidak ditemukan")
 
         token = create_access_token({"sub": participant.id, "email": participant.email, "role": "user", "name": participant.name})
-
+        print(f"LOGIN success email={email} participant_id={participant.id}")
         return {
             "token": token,
             "player_id": participant.id,
@@ -377,6 +384,8 @@ async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)):
     except HTTPException:
         raise
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=503, detail="Login service unavailable") from e
     finally:
         duration_ms = (time.perf_counter() - start) * 1000
@@ -678,8 +687,10 @@ async def get_system_state(db: AsyncSession = Depends(get_db)):
     try:
         cached = cache.get("system_state")
         if cached is not None:
+            print("SYSTEM-STATE cache hit")
             return JSONResponse(content=cached, headers={"Cache-Control": "public, max-age=30"})
 
+        print("SYSTEM-STATE cache miss -> DB")
         repo = SystemStateRepository(db)
         state = await repo.get_or_create()
         response = SystemStateResponse(
@@ -691,6 +702,8 @@ async def get_system_state(db: AsyncSession = Depends(get_db)):
         cache.set("system_state", response.model_dump(), ttl_seconds=30)
         return JSONResponse(content=response.model_dump(), headers={"Cache-Control": "public, max-age=30"})
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=503, detail="Failed to load system state") from e
     finally:
         duration_ms = (time.perf_counter() - start) * 1000

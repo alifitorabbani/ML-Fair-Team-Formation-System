@@ -21,7 +21,7 @@ if "postgresql+asyncpg://" in SQLALCHEMY_DATABASE_URL:
 
 connect_args: dict = {}
 if SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
-    connect_args = {"check_same_thread": False}
+    connect_args = {"check_same_thread": False, "timeout": 10}
 
 # On Vercel/serverless, enable SSL for asyncpg explicitly if using PostgreSQL
 if os.getenv("VERCEL") == "1" and SQLALCHEMY_DATABASE_URL.startswith("postgresql+asyncpg://"):
@@ -33,6 +33,10 @@ if SQLALCHEMY_DATABASE_URL.startswith("postgresql+asyncpg://"):
     connect_args.setdefault("timeout", 10)
     connect_args.setdefault("server_settings", {})
     connect_args["server_settings"].setdefault("statement_timeout", "30000")
+
+import logging
+logger = logging.getLogger(__name__)
+logger.info("DB_URL=%s connect_args_keys=%s", SQLALCHEMY_DATABASE_URL.split("?")[0], sorted(connect_args.keys()))
 
 engine = create_async_engine(
     SQLALCHEMY_DATABASE_URL,
@@ -49,15 +53,20 @@ async_session_maker = async_sessionmaker(
 
 
 async def get_db() -> AsyncSession:
-    async with async_session_maker() as session:
-        try:
+    import time
+    start = time.perf_counter()
+    try:
+        async with async_session_maker() as session:
             yield session
             await session.commit()
-        except Exception:
-            await session.rollback()
-            raise
-        finally:
-            await session.close()
+    except Exception:
+        await session.rollback()
+        raise
+    finally:
+        dur = (time.perf_counter() - start) * 1000
+        if dur > 200:
+            logger.info("DB session lifetime took %.0fms", dur)
+        await session.close()
 
 
 async def init_db():
