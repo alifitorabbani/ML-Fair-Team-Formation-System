@@ -1,4 +1,5 @@
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.pool import NullPool
 from app.config.settings import settings
 from app.models.models import Base
 import os
@@ -30,6 +31,7 @@ engine = create_async_engine(
     SQLALCHEMY_DATABASE_URL,
     connect_args=connect_args,
     echo=False,
+    poolclass=NullPool if os.getenv("VERCEL") == "1" else None,
 )
 
 async_session_maker = async_sessionmaker(

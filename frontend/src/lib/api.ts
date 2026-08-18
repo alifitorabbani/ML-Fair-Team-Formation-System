@@ -27,14 +27,66 @@ export async function login(email: string): Promise<LoginResponse> {
   return response.json()
 }
 
+const SYSTEM_STATE_CACHE_KEY = 'system_state_cache'
+const SYSTEM_STATE_CACHE_TTL_MS = 60_000
+
+function getCachedSystemState(): SystemStateResponse | null {
+  try {
+    const raw = localStorage.getItem(SYSTEM_STATE_CACHE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as { value: SystemStateResponse; expiresAt: number }
+    if (Date.now() > parsed.expiresAt) {
+      localStorage.removeItem(SYSTEM_STATE_CACHE_KEY)
+      return null
+    }
+    return parsed.value
+  } catch {
+    return null
+  }
+}
+
+function setCachedSystemState(value: SystemStateResponse) {
+  try {
+    localStorage.setItem(
+      SYSTEM_STATE_CACHE_KEY,
+      JSON.stringify({ value, expiresAt: Date.now() + SYSTEM_STATE_CACHE_TTL_MS }),
+    )
+  } catch {
+    // ignore quota errors
+  }
+}
+
+function timeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('Request timeout')), ms)
+    promise
+      .then(value => {
+        clearTimeout(timer)
+        resolve(value)
+      })
+      .catch(err => {
+        clearTimeout(timer)
+        reject(err)
+      })
+  })
+}
+
 export async function getSystemState(): Promise<SystemStateResponse> {
-  const response = await fetch(`${API_BASE}/api/system-state`)
+  const cached = getCachedSystemState()
+  if (cached) return cached
+
+  const response = await timeout(
+    fetch(`${API_BASE}/api/system-state`),
+    10_000,
+  )
 
   if (!response.ok) {
     throw new Error('Failed to fetch system state')
   }
 
-  return response.json()
+  const data = (await response.json()) as SystemStateResponse
+  setCachedSystemState(data)
+  return data
 }
 
 export async function getConfig(): Promise<any> {

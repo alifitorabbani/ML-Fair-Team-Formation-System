@@ -24,9 +24,6 @@ from app.schemas.schemas import (
     SystemStateResponse,
     AdminDashboardStats,
 )
-from app.services.team_service import TeamFormationService
-from app.services.ranking_service import RankingService
-from app.services.storage_service import storage_service
 from app.api.deps import get_current_user, get_admin_user, create_access_token, decode_token
 
 
@@ -141,7 +138,20 @@ from app.repositories.audit_repository import AuditRepository
 from app.database import get_db, init_db, Base, engine
 from app.tournament.routers.admin_tournament import router as admin_tournament_router
 from app.tournament.routers.user_tournament import router as user_tournament_router
-service = TeamFormationService()
+class _LazyService:
+    def __init__(self):
+        self._service = None
+
+    def _get(self):
+        if self._service is None:
+            from app.services.team_service import TeamFormationService
+            self._service = TeamFormationService()
+        return self._service
+
+    def __getattr__(self, name):
+        return getattr(self._get(), name)
+
+service = _LazyService()
 
 
 class LoginRequest(BaseModel):
@@ -638,7 +648,7 @@ async def get_config():
 async def get_system_state(db: AsyncSession = Depends(get_db)):
     cached = cache.get("system_state")
     if cached is not None:
-        return JSONResponse(content=cached, headers={"Cache-Control": "public, max-age=10"})
+        return JSONResponse(content=cached, headers={"Cache-Control": "public, max-age=30"})
 
     repo = SystemStateRepository(db)
     state = await repo.get_or_create()
@@ -648,8 +658,8 @@ async def get_system_state(db: AsyncSession = Depends(get_db)):
         current_team_version_id=state.current_team_version_id,
         updated_at=state.updated_at.isoformat() if state.updated_at else None,
     )
-    cache.set("system_state", response.model_dump(), ttl_seconds=10)
-    return JSONResponse(content=response.model_dump(), headers={"Cache-Control": "public, max-age=10"})
+    cache.set("system_state", response.model_dump(), ttl_seconds=30)
+    return JSONResponse(content=response.model_dump(), headers={"Cache-Control": "public, max-age=30"})
 
 
 @app.post("/api/admin/generate-ranking")
@@ -666,6 +676,7 @@ async def admin_generate_ranking(request: AdminGenerateRankingRequest, x_user_to
     system_state_repo = SystemStateRepository(db)
     audit_repo = AuditRepository(db)
 
+    from app.services.ranking_service import RankingService
     ranking_service = RankingService(
         participant_repo=participant_repo,
         ranking_repo=ranking_repo,
@@ -711,6 +722,7 @@ async def admin_ranking_preview(x_user_token: Optional[str] = Header(None), db: 
     system_state_repo = SystemStateRepository(db)
     audit_repo = AuditRepository(db)
 
+    from app.services.ranking_service import RankingService
     ranking_service = RankingService(
         participant_repo=participant_repo,
         ranking_repo=ranking_repo,
@@ -759,6 +771,7 @@ async def admin_confirm_ranking(ranking_version_id: str = Query(...), x_user_tok
     system_state_repo = SystemStateRepository(db)
     audit_repo = AuditRepository(db)
 
+    from app.services.ranking_service import RankingService
     ranking_service = RankingService(
         participant_repo=participant_repo,
         ranking_repo=ranking_repo,
@@ -794,6 +807,7 @@ async def admin_get_rankings(x_user_token: Optional[str] = Header(None), db: Asy
     system_state_repo = SystemStateRepository(db)
     audit_repo = AuditRepository(db)
 
+    from app.services.ranking_service import RankingService
     ranking_service = RankingService(
         participant_repo=participant_repo,
         ranking_repo=ranking_repo,
@@ -825,6 +839,7 @@ async def admin_get_ranking_versions(x_user_token: Optional[str] = Header(None),
     system_state_repo = SystemStateRepository(db)
     audit_repo = AuditRepository(db)
 
+    from app.services.ranking_service import RankingService
     ranking_service = RankingService(
         participant_repo=participant_repo,
         ranking_repo=ranking_repo,
@@ -1981,6 +1996,7 @@ async def get_all_rankings(x_user_token: Optional[str] = Header(None), db: Async
     system_state_repo = SystemStateRepository(db)
     audit_repo = AuditRepository(db)
 
+    from app.services.ranking_service import RankingService
     ranking_service = RankingService(
         participant_repo=participant_repo,
         ranking_repo=ranking_repo,
