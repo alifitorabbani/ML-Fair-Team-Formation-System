@@ -374,6 +374,10 @@ async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)):
             "name": participant.name,
             "role": "user",
         }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=503, detail="Login service unavailable") from e
     finally:
         duration_ms = (time.perf_counter() - start) * 1000
         if duration_ms > 500:
@@ -686,6 +690,8 @@ async def get_system_state(db: AsyncSession = Depends(get_db)):
         )
         cache.set("system_state", response.model_dump(), ttl_seconds=30)
         return JSONResponse(content=response.model_dump(), headers={"Cache-Control": "public, max-age=30"})
+    except Exception as e:
+        raise HTTPException(status_code=503, detail="Failed to load system state") from e
     finally:
         duration_ms = (time.perf_counter() - start) * 1000
         if duration_ms > 500:
