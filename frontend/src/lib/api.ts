@@ -8,7 +8,19 @@ import {
   AuditLogResponse,
 } from '@/types'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? ''
+const API_BASE = (() => {
+  const explicit = process.env.NEXT_PUBLIC_API_URL
+  const isProduction = process.env.NODE_ENV === 'production'
+
+  if (explicit && /^https?:\/\//i.test(explicit)) {
+    // In production, ignore localhost/127.0.0.1 to avoid baking dev URLs into deployed frontend
+    if (isProduction && (explicit.includes('localhost') || explicit.includes('127.0.0.1'))) {
+      return ''
+    }
+    return explicit
+  }
+  return ''
+})()
 
 function isAbortError(err: unknown): boolean {
   return err instanceof Error && err.name === 'AbortError'

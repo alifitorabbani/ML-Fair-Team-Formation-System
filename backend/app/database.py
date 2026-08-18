@@ -26,6 +26,7 @@ if SQLALCHEMY_DATABASE_URL.startswith("sqlite"):
 # On Vercel, enable SSL for asyncpg explicitly if using PostgreSQL
 if os.getenv("VERCEL") == "1" and SQLALCHEMY_DATABASE_URL.startswith("postgresql+asyncpg://"):
     connect_args["ssl"] = True
+    connect_args["timeout"] = 10
 
 engine = create_async_engine(
     SQLALCHEMY_DATABASE_URL,
