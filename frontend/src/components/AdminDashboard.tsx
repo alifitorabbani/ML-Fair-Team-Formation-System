@@ -67,6 +67,9 @@ export default function AdminDashboard({
   const abortControllerRef = useRef<AbortController | null>(null)
   const loadedTabsRef = useRef<Set<Tab>>(new Set())
 
+  const isAbortError = (err: unknown) =>
+    err instanceof Error && err.name === 'AbortError'
+
   const loadDashboardStats = async () => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort()
@@ -80,7 +83,7 @@ export default function AdminDashboard({
       if (controller.signal.aborted) return
       setStats(dashboardRes)
     } catch (err) {
-      if (controller.signal.aborted) return
+      if (controller.signal.aborted || isAbortError(err)) return
       console.error('Failed to load dashboard stats:', err)
       if (isAdminError(err)) {
         clearSession()
@@ -124,9 +127,8 @@ export default function AdminDashboard({
         }
       }
     } catch (err) {
-      if (!controller.signal.aborted) {
-        console.error(`Failed to load ${tab} data:`, err)
-      }
+      if (controller.signal.aborted || isAbortError(err)) return
+      console.error(`Failed to load ${tab} data:`, err)
     }
   }
 
