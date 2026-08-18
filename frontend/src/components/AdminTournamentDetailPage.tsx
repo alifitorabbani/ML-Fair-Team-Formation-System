@@ -196,6 +196,7 @@ export default function AdminTournamentDetailPage({ tournament, onBack }: { tour
 
   const [matchResults, setMatchResults] = useState<Record<string, { score_a: number; score_b: number; kills_a: number; kills_b: number; deaths_a: number; deaths_b: number; winner_team_id?: string; loser_team_id?: string }>>({})
   const [bracketMapResults, setBracketMapResults] = useState<Record<string, Array<{ map_number: number; winner_team_id?: string }>>>({})
+  const [gameResults, setGameResults] = useState<Record<string, Array<{ game_number: number; score_a: number; score_b: number; kills_a: number; kills_b: number; deaths_a: number; deaths_b: number; winner_team_id?: string; scheduled_date?: string; start_time?: string; end_time?: string }>>>({})
 
   const updateMatchResult = (matchId: string, field: string, value: number | string) => {
     setMatchResults((prev) => ({
@@ -232,9 +233,9 @@ export default function AdminTournamentDetailPage({ tournament, onBack }: { tour
     const teamAId = match?.team_a_id
     const teamBId = match?.team_b_id
     
-    // For bracket matches (BO3/BO5/BO7), require map_results
+    // For bracket matches (BO3/BO5/BO7), require game breakdown
     if (matchFormat !== 'BO1') {
-      const mapResults = bracketMapResults[matchId] || []
+      const gamesData = gameResults[matchId] || []
       const requiredWins = matchFormat === 'BO3' ? 2 : matchFormat === 'BO5' ? 3 : matchFormat === 'BO7' ? 4 : 1
       
       if (!data.winner_team_id || !data.loser_team_id) {
@@ -246,9 +247,9 @@ export default function AdminTournamentDetailPage({ tournament, onBack }: { tour
         return
       }
       
-      // Count wins from map results
-      const teamAWins = mapResults.filter((m) => m.winner_team_id === data.winner_team_id).length
-      const teamBWins = mapResults.filter((m) => m.winner_team_id === data.loser_team_id).length
+      // Count wins from game results
+      const teamAWins = gamesData.filter((m) => m.winner_team_id === data.winner_team_id).length
+      const teamBWins = gamesData.filter((m) => m.winner_team_id === data.loser_team_id).length
       
       if (data.winner_team_id && teamAWins !== requiredWins && teamBWins !== requiredWins) {
         setMatchError(`Breakdown harus menunjukkan ${requiredWins} kemenangan untuk winner`)
@@ -260,18 +261,24 @@ export default function AdminTournamentDetailPage({ tournament, onBack }: { tour
       try {
         const payload = {
           ...data,
-          map_results: mapResults.map((m, idx) => ({
-            map_number: m.map_number || idx + 1,
+          map_results: gamesData.map((m, idx) => ({
+            map_number: m.game_number || idx + 1,
             team_a_id: teamAId,
             team_b_id: teamBId,
             winner_team_id: m.winner_team_id,
+            score_a: m.score_a,
+            score_b: m.score_b,
+            kills_a: m.kills_a,
+            kills_b: m.kills_b,
+            deaths_a: m.deaths_a,
+            deaths_b: m.deaths_b,
             status: 'COMPLETED',
           })),
         }
         await adminSubmitMatchResult(token, tournamentId, matchId, payload)
         setMessage('Hasil pertandingan berhasil disimpan')
         setMatchResults((prev) => { const next = { ...prev }; delete next[matchId]; return next })
-        setBracketMapResults((prev) => { const next = { ...prev }; delete next[matchId]; return next })
+        setGameResults((prev) => { const next = { ...prev }; delete next[matchId]; return next })
         load()
       } catch (err) {
         setMatchError(err instanceof Error ? err.message : 'Gagal menyimpan hasil')
@@ -709,6 +716,7 @@ export default function AdminTournamentDetailPage({ tournament, onBack }: { tour
                       {stageMatches.map((m: any) => {
                         const result = matchResults[m.id] || { score_a: 0, score_b: 0, kills_a: 0, kills_b: 0, deaths_a: 0, deaths_b: 0 }
                         const isCompleted = m.status === 'COMPLETED'
+                        const games = m.format === 'BO3' ? 3 : m.format === 'BO5' ? 5 : m.format === 'BO7' ? 7 : 1
                         return (
                           <Card key={m.id}>
                             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -818,27 +826,198 @@ export default function AdminTournamentDetailPage({ tournament, onBack }: { tour
                                     </div>
                                   </div>
                                   {m.format !== 'BO1' && (
-                                    <div className="space-y-1">
-                                      <label className="mb-1 block text-xs text-gray-400">Hasil Map</label>
-                                      {Array.from({ length: Math.min((m.format === 'BO3' ? 2 : m.format === 'BO5' ? 3 : m.format === 'BO7' ? 4 : 1) * 2 - 1, 7) }, (_, i) => {
-                                        const mapResult = (bracketMapResults[m.id] || []).find((r) => r.map_number === i + 1)
+                                    <div className="space-y-3">
+                                      <label className="mb-1 block text-xs text-gray-400">Breakdown Pertandingan</label>
+                                      {Array.from({ length: games }, (_, i) => {
+                                        const gameResult = (gameResults[m.id] || [])[i] || { score_a: 0, score_b: 0, kills_a: 0, kills_b: 0, deaths_a: 0, deaths_b: 0, winner_team_id: '' }
                                         return (
-                                          <div key={i} className="flex items-center justify-between rounded-lg border border-white/10 bg-surface-900/40 px-3 py-2">
-                                            <span className="text-xs text-gray-400">Map {i + 1}</span>
-                                            <select
-                                              value={mapResult?.winner_team_id || ''}
-                                              onChange={(e) => {
-                                                const value = e.target.value
-                                                if (value) {
-                                                  updateBracketMapResult(m.id, i + 1, value)
-                                                }
-                                              }}
-                                              className="rounded-lg border border-white/10 bg-surface-900/60 px-2 py-1 text-xs text-white focus:border-brand-500 focus:outline-none"
-                                            >
-                                              <option value="">- Pilih Winner -</option>
-                                              <option value={m.team_a_id}>{getTeamName(m.team_a_id)}</option>
-                                              <option value={m.team_b_id}>{getTeamName(m.team_b_id)}</option>
-                                            </select>
+                                          <div key={i} className="rounded-lg border border-white/10 bg-surface-900/40 p-3">
+                                            <div className="mb-2 text-xs font-medium text-gray-400">Game {i + 1}</div>
+                                            <div className="grid gap-2 md:grid-cols-2">
+                                              <div>
+                                                <label className="mb-1 block text-xs text-gray-400">Score {getTeamName(m.team_a_id)}</label>
+                                                <input
+                                                  type="number"
+                                                  min={0}
+                                                  value={gameResult.score_a}
+                                                  onChange={(e) => {
+                                                    const value = parseInt(e.target.value || '0', 10)
+                                                    setGameResults((prev) => {
+                                                      const current = prev[m.id] || Array.from({ length: games }, (_, idx) => ({ game_number: idx + 1, score_a: 0, score_b: 0, kills_a: 0, kills_b: 0, deaths_a: 0, deaths_b: 0, winner_team_id: '' }))
+                                                      const updated = [...current]
+                                                      updated[i] = { ...updated[i], score_a: value }
+                                                      return { ...prev, [m.id]: updated }
+                                                    })
+                                                  }}
+                                                  className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
+                                                />
+                                              </div>
+                                              <div>
+                                                <label className="mb-1 block text-xs text-gray-400">Score {getTeamName(m.team_b_id)}</label>
+                                                <input
+                                                  type="number"
+                                                  min={0}
+                                                  value={gameResult.score_b}
+                                                  onChange={(e) => {
+                                                    const value = parseInt(e.target.value || '0', 10)
+                                                    setGameResults((prev) => {
+                                                      const current = prev[m.id] || Array.from({ length: games }, (_, idx) => ({ game_number: idx + 1, score_a: 0, score_b: 0, kills_a: 0, kills_b: 0, deaths_a: 0, deaths_b: 0, winner_team_id: '' }))
+                                                      const updated = [...current]
+                                                      updated[i] = { ...updated[i], score_b: value }
+                                                      return { ...prev, [m.id]: updated }
+                                                    })
+                                                  }}
+                                                  className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
+                                                />
+                                              </div>
+                                              <div>
+                                                <label className="mb-1 block text-xs text-gray-400">Kills {getTeamName(m.team_a_id)}</label>
+                                                <input
+                                                  type="number"
+                                                  min={0}
+                                                  value={gameResult.kills_a}
+                                                  onChange={(e) => {
+                                                    const value = parseInt(e.target.value || '0', 10)
+                                                    setGameResults((prev) => {
+                                                      const current = prev[m.id] || Array.from({ length: games }, (_, idx) => ({ game_number: idx + 1, score_a: 0, score_b: 0, kills_a: 0, kills_b: 0, deaths_a: 0, deaths_b: 0, winner_team_id: '' }))
+                                                      const updated = [...current]
+                                                      updated[i] = { ...updated[i], kills_a: value }
+                                                      return { ...prev, [m.id]: updated }
+                                                    })
+                                                  }}
+                                                  className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
+                                                />
+                                              </div>
+                                              <div>
+                                                <label className="mb-1 block text-xs text-gray-400">Kills {getTeamName(m.team_b_id)}</label>
+                                                <input
+                                                  type="number"
+                                                  min={0}
+                                                  value={gameResult.kills_b}
+                                                  onChange={(e) => {
+                                                    const value = parseInt(e.target.value || '0', 10)
+                                                    setGameResults((prev) => {
+                                                      const current = prev[m.id] || Array.from({ length: games }, (_, idx) => ({ game_number: idx + 1, score_a: 0, score_b: 0, kills_a: 0, kills_b: 0, deaths_a: 0, deaths_b: 0, winner_team_id: '' }))
+                                                      const updated = [...current]
+                                                      updated[i] = { ...updated[i], kills_b: value }
+                                                      return { ...prev, [m.id]: updated }
+                                                    })
+                                                  }}
+                                                  className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
+                                                />
+                                              </div>
+                                              <div>
+                                                <label className="mb-1 block text-xs text-gray-400">Deaths {getTeamName(m.team_a_id)}</label>
+                                                <input
+                                                  type="number"
+                                                  min={0}
+                                                  value={gameResult.deaths_a}
+                                                  onChange={(e) => {
+                                                    const value = parseInt(e.target.value || '0', 10)
+                                                    setGameResults((prev) => {
+                                                      const current = prev[m.id] || Array.from({ length: games }, (_, idx) => ({ game_number: idx + 1, score_a: 0, score_b: 0, kills_a: 0, kills_b: 0, deaths_a: 0, deaths_b: 0, winner_team_id: '' }))
+                                                      const updated = [...current]
+                                                      updated[i] = { ...updated[i], deaths_a: value }
+                                                      return { ...prev, [m.id]: updated }
+                                                    })
+                                                  }}
+                                                  className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
+                                                />
+                                             </div>
+                                             <div>
+                                               <label className="mb-1 block text-xs text-gray-400">Deaths {getTeamName(m.team_b_id)}</label>
+                                               <input
+                                                 type="number"
+                                                 min={0}
+                                                 value={gameResult.deaths_b}
+                                                 onChange={(e) => {
+                                                   const value = parseInt(e.target.value || '0', 10)
+                                                   setGameResults((prev) => {
+                                                     const current = prev[m.id] || Array.from({ length: games }, (_, idx) => ({ game_number: idx + 1, score_a: 0, score_b: 0, kills_a: 0, kills_b: 0, deaths_a: 0, deaths_b: 0, winner_team_id: '' }))
+                                                     const updated = [...current]
+                                                     updated[i] = { ...updated[i], deaths_b: value }
+                                                     return { ...prev, [m.id]: updated }
+                                                   })
+                                                 }}
+                                                 className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
+                                               />
+                                              </div>
+                                            </div>
+                                            <div className="grid gap-2 md:grid-cols-2">
+                                              <div>
+                                                <label className="mb-1 block text-xs text-gray-400">Winner Game {i + 1}</label>
+                                                <select
+                                                  value={gameResult.winner_team_id || ''}
+                                                  onChange={(e) => {
+                                                    const value = e.target.value
+                                                    setGameResults((prev) => {
+                                                      const current = prev[m.id] || Array.from({ length: games }, (_, idx) => ({ game_number: idx + 1, score_a: 0, score_b: 0, kills_a: 0, kills_b: 0, deaths_a: 0, deaths_b: 0, winner_team_id: '' }))
+                                                      const updated = [...current]
+                                                      updated[i] = { ...updated[i], winner_team_id: value }
+                                                      return { ...prev, [m.id]: updated }
+                                                    })
+                                                  }}
+                                                  className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
+                                                >
+                                                  <option value="">- Pilih Winner -</option>
+                                                  <option value={m.team_a_id}>{getTeamName(m.team_a_id)}</option>
+                                                  <option value={m.team_b_id}>{getTeamName(m.team_b_id)}</option>
+                                                </select>
+                                              </div>
+                                              <div>
+                                                <label className="mb-1 block text-xs text-gray-400">Tanggal</label>
+                                                <input
+                                                  type="date"
+                                                  value={gameResult.scheduled_date || m.scheduled_date || ''}
+                                                  onChange={(e) => {
+                                                    const value = e.target.value
+                                                    setGameResults((prev) => {
+                                                      const current = prev[m.id] || Array.from({ length: games }, (_, idx) => ({ game_number: idx + 1, score_a: 0, score_b: 0, kills_a: 0, kills_b: 0, deaths_a: 0, deaths_b: 0, winner_team_id: '' }))
+                                                      const updated = [...current]
+                                                      updated[i] = { ...updated[i], scheduled_date: value }
+                                                      return { ...prev, [m.id]: updated }
+                                                    })
+                                                  }}
+                                                  className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
+                                                />
+                                              </div>
+                                            </div>
+                                            <div className="grid gap-2 md:grid-cols-2">
+                                              <div>
+                                                <label className="mb-1 block text-xs text-gray-400">Waktu Mulai</label>
+                                                <input
+                                                  type="time"
+                                                  value={gameResult.start_time || ''}
+                                                  onChange={(e) => {
+                                                    const value = e.target.value
+                                                    setGameResults((prev) => {
+                                                      const current = prev[m.id] || Array.from({ length: games }, (_, idx) => ({ game_number: idx + 1, score_a: 0, score_b: 0, kills_a: 0, kills_b: 0, deaths_a: 0, deaths_b: 0, winner_team_id: '' }))
+                                                      const updated = [...current]
+                                                      updated[i] = { ...updated[i], start_time: value }
+                                                      return { ...prev, [m.id]: updated }
+                                                    })
+                                                  }}
+                                                  className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
+                                                />
+                                              </div>
+                                              <div>
+                                                <label className="mb-1 block text-xs text-gray-400">Waktu Selesai</label>
+                                                <input
+                                                  type="time"
+                                                  value={gameResult.end_time || ''}
+                                                  onChange={(e) => {
+                                                    const value = e.target.value
+                                                    setGameResults((prev) => {
+                                                      const current = prev[m.id] || Array.from({ length: games }, (_, idx) => ({ game_number: idx + 1, score_a: 0, score_b: 0, kills_a: 0, kills_b: 0, deaths_a: 0, deaths_b: 0, winner_team_id: '' }))
+                                                      const updated = [...current]
+                                                      updated[i] = { ...updated[i], end_time: value }
+                                                      return { ...prev, [m.id]: updated }
+                                                    })
+                                                  }}
+                                                  className="w-full rounded-xl border border-white/10 bg-surface-900/60 px-3 py-1.5 text-sm text-white focus:border-brand-500 focus:outline-none"
+                                                />
+                                              </div>
+                                            </div>
                                           </div>
                                         )
                                       })}
